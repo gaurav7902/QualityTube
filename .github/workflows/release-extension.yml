@@ -54,12 +54,14 @@ jobs:
                   git commit -m "Update QualityTube v${{ steps.version.outputs.version }} archives [skip ci]"
                   git push
 
-            - name: Create GitHub release
+            - name: Create or update GitHub release
               uses: softprops/action-gh-release@v2
               with:
                   tag_name: v${{ steps.version.outputs.version }}
                   name: QualityTube v${{ steps.version.outputs.version }}
                   generate_release_notes: true
+                  overwrite_files: true
+                  force_overwrite: true
                   files: |
                       qualitytube-chrome-${{ steps.version.outputs.version }}.zip
                       qualitytube-firefox-${{ steps.version.outputs.version }}.zip
