@@ -1,0 +1,48 @@
+name: Release QualityTube
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - "extension/**"
+            - "build-chrome.sh"
+            - "build-firefox.sh"
+            - ".github/workflows/release-extension.yml"
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Read and validate extension versions
+              id: version
+              run: |
+                  set -euo pipefail
+                  chrome_version="$(jq -r '.version' extension/chromium-based/manifest.json)"
+                  firefox_version="$(jq -r '.version' extension/firefox/manifest.json)"
+
+                  test "$chrome_version" = "$firefox_version"
+                  printf 'version=%s\n' "$chrome_version" >> "$GITHUB_OUTPUT"
+
+            - name: Build extension archives
+              run: |
+                  ./build-chrome.sh
+                  ./build-firefox.sh
+
+            - name: Create GitHub release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: v${{ steps.version.outputs.version }}
+                  name: QualityTube v${{ steps.version.outputs.version }}
+                  generate_release_notes: true
+                  files: |
+                      dist/qualitytube-chrome-${{ steps.version.outputs.version }}.zip
+                      dist/qualitytube-firefox-${{ steps.version.outputs.version }}.zip
