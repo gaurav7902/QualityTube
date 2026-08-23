@@ -3,10 +3,9 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source_dir="$root_dir/extension/firefox"
-output_dir="$root_dir/dist"
-archive="$output_dir/qualitytube-firefox-1.0.0.zip"
+manifest="$source_dir/manifest.json"
+archive="$root_dir/qualitytube-firefox-$(jq -r '.version' "$manifest").zip"
 
-mkdir -p "$output_dir"
 rm -f "$archive"
 
 (

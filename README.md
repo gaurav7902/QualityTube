@@ -20,7 +20,7 @@ QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 exten
 
 ### Firefox
 
-1. Download `qualitytube-firefox-1.0.0.zip` from the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.0).
+1. Download [`qualitytube-firefox-1.0.0.zip`](https://github.com/gaurav7902/QualityTube/raw/main/qualitytube-firefox-1.0.0.zip) from the repo root or the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.0).
 2. Open `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on...**.
 4. Select `manifest.json` from the extracted folder.
@@ -30,7 +30,7 @@ QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 exten
 
 ### Chrome / Edge / Brave
 
-1. Download `qualitytube-chrome-1.0.0.zip` from the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.0).
+1. Download [`qualitytube-chrome-1.0.0.zip`](https://github.com/gaurav7902/QualityTube/raw/main/qualitytube-chrome-1.0.0.zip) from the repo root or the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.0).
 2. Unzip the file to a local folder.
 3. Open your Chromium-based browser and go to `chrome://extensions/`, `edge://extensions/`, or `brave://extensions/` as appropriate.
 4. Enable **Developer mode** (top right).
@@ -46,8 +46,8 @@ The content script waits for YouTube's `#movie_player` (`.html5-video-player`) t
 Two shell scripts at the project root build the release archives and match the names produced by the GitHub Actions workflow in `.github/workflows/release-extension.yml`:
 
 ```bash
-./build-chrome.sh    # creates dist/qualitytube-chrome-<version>.zip
-./build-firefox.sh   # creates dist/qualitytube-firefox-<version>.zip
+./build-chrome.sh    # creates qualitytube-chrome-<version>.zip in the repo root
+./build-firefox.sh   # creates qualitytube-firefox-<version>.zip in the repo root
 ```
 
 Pushing a change to `extension/**`, `build-chrome.sh`, `build-firefox.sh`, or the workflow on `main` automatically publishes both archives to a GitHub release whose tag matches the `version` field in each manifest.
