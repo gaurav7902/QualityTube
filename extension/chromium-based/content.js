@@ -161,13 +161,27 @@ class YouTubeQualityController {
             const levels = player.getAvailableQualityLevels();
             if (!levels || levels.length === 0) return;
 
-            const best = levels[0]; // YouTube returns levels best-first
+            // 'auto' is not an explicit quality. Never treat it as "best" —
+            // filter it out so we always select a concrete level rather than
+            // leaving the player free to throttle based on network conditions.
+            const explicitLevels = levels.filter(
+                (level) =>
+                    typeof level === 'string' && level.toLowerCase() !== 'auto',
+            );
+
+            const best = explicitLevels[0]; // YouTube returns levels best-first
+            if (!best) return;
+
             const current =
                 typeof player.getPlaybackQuality === 'function'
                     ? player.getPlaybackQuality()
                     : null;
 
-            if (current === best) return; // already at best, nothing to do
+            // 'auto' is never considered "already at best" — only an explicit
+            // selection satisfies the requirement.
+            if (current !== null && current !== undefined && current === best) {
+                return; // already at best, nothing to do
+            }
 
             if (typeof player.setPlaybackQualityRange === 'function') {
                 player.setPlaybackQualityRange(best, best);
