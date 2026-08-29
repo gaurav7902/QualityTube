@@ -25,7 +25,7 @@ jobs:
             - name: Read and validate extension versions
               id: version
               run: |
-                  set -euo pipefail -f
+                  set -euo pipefail
                   chrome_version="$(jq -r '.version' extension/chromium-based/manifest.json)"
                   firefox_version="$(jq -r '.version' extension/firefox/manifest.json)"
 
@@ -43,8 +43,8 @@ jobs:
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
 
-                  git add qualitytube-chrome-${{ steps.version.outputs.version }}.zip
-                  git add qualitytube-firefox-${{ steps.version.outputs.version }}.zip
+                  git add qualitytube-chrome-${{ steps.version.outputs.version }}.zip -f
+                  git add qualitytube-firefox-${{ steps.version.outputs.version }}.zip -f
 
                   if git diff --cached --quiet; then
                       echo "No archive changes to commit."
