@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "QualityTube",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Automatically set YouTube videos to the highest available quality",
     "browser_specific_settings": {
         "gecko": {
@@ -13,6 +13,7 @@
         }
     },
     "host_permissions": ["https://www.youtube.com/*", "https://youtube.com/*"],
+    "permissions": ["storage"],
     "action": {
         "default_popup": "popup.html",
         "default_title": "QualityTube"

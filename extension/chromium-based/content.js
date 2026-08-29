@@ -14,7 +14,48 @@
 class YouTubeQualityController {
     constructor() {
         this.applyTimer = null;
+        this.isClicking = false;
+        this.CLICK_DELAY = 300;
+        this.hasPremium = false;
+        this.initStorage();
         this.initialize();
+    }
+
+    initStorage() {
+        const storage = this.getStorage();
+        if (storage) {
+            storage.get({hasPremium: false}, (items) => {
+                if (items) {
+                    this.hasPremium = !!items.hasPremium;
+                }
+            });
+        }
+
+        const storageArea =
+            typeof chrome !== 'undefined' && chrome.storage
+                ? chrome.storage
+                : typeof browser !== 'undefined' && browser.storage
+                  ? browser.storage
+                  : null;
+
+        if (storageArea && storageArea.onChanged) {
+            storageArea.onChanged.addListener((changes) => {
+                if (changes.hasPremium) {
+                    this.hasPremium = !!changes.hasPremium.newValue;
+                    this.queueQuality(100);
+                }
+            });
+        }
+    }
+
+    getStorage() {
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+            return chrome.storage.sync || chrome.storage.local;
+        }
+        if (typeof browser !== 'undefined' && browser.storage) {
+            return browser.storage.sync || browser.storage.local;
+        }
+        return null;
     }
 
     initialize() {
@@ -56,9 +97,25 @@ class YouTubeQualityController {
         );
     }
 
+    isPremiumItem(item) {
+        if (!item) return false;
+        const text = (item.textContent || '').toLowerCase();
+        if (text.includes('enhanced bitrate') || text.includes('premium')) {
+            return true;
+        }
+        if (
+            item.querySelector(
+                '.ytp-menuitem-premium-badge, .ytp-premium-label, [data-is-premium="true"]',
+            )
+        ) {
+            return true;
+        }
+        return false;
+    }
+
     setQuality() {
         const player = this.getPlayer();
-        if (!player) return;
+        if (!player || this.isClicking) return;
 
         // No quality menu exists during an ad, and poking at player
         // controls mid-ad is exactly the kind of thing that causes odd
@@ -66,6 +123,35 @@ class YouTubeQualityController {
         if (this.isAdShowing(player)) {
             this.queueQuality(1500);
             return;
+        }
+
+        if (typeof player.getAvailableQualityData === 'function') {
+            const qualityData = player.getAvailableQualityData();
+            const hasPaygatedOption =
+                Array.isArray(qualityData) &&
+                qualityData.some(
+                    (item) =>
+                        item.paygatedQualityDetails ||
+                        (item.qualityLabel &&
+                            /premium|enhanced bitrate/i.test(
+                                item.qualityLabel,
+                            )),
+                );
+
+            if (this.hasPremium && hasPaygatedOption) {
+                const currentLabel =
+                    typeof player.getPlaybackQualityLabel === 'function'
+                        ? player.getPlaybackQualityLabel()
+                        : null;
+                if (
+                    currentLabel &&
+                    /premium|enhanced bitrate/i.test(currentLabel)
+                ) {
+                    return; // already on Enhanced Bitrate, nothing to do
+                }
+                this.setQualityViaUI(player);
+                return;
+            }
         }
 
         // Preferred path: call the player's own API directly. This is the
@@ -96,54 +182,100 @@ class YouTubeQualityController {
     }
 
     setQualityViaUI(player) {
-        if (player.classList.contains('ytp-settings-menu-visible')) return;
+        if (
+            this.isClicking ||
+            player.classList.contains('ytp-settings-menu-visible')
+        )
+            return;
 
         const settingsButton = player.querySelector('.ytp-settings-button');
         if (!settingsButton) return;
 
+        this.isClicking = true;
         settingsButton.click();
-        this.waitForQualityMenu(player);
+
+        setTimeout(() => {
+            this.waitForQualityMenu(player);
+        }, this.CLICK_DELAY);
     }
 
-    waitForQualityMenu(player, retries = 5) {
+    waitForQualityMenu(player, retries = 5, subMenuOpened = false) {
         const attemptApplyQuality = () => {
             // Bail immediately if an ad started while we were waiting.
-            if (this.isAdShowing(player)) return;
+            if (this.isAdShowing(player)) {
+                this.isClicking = false;
+                return;
+            }
 
-            const qualityItems = Array.from(
+            const rawQualityItems = Array.from(
                 player.querySelectorAll(
                     ".ytp-quality-menu .ytp-menuitem, [role='menuitemradio']",
                 ),
             ).filter((item) => /\b\d{3,4}p\b/.test(item.textContent));
 
-            const targetQuality = qualityItems.sort(
-                (first, second) =>
-                    this.getResolution(second) - this.getResolution(first),
-            )[0];
+            let qualityItems = rawQualityItems;
+
+            if (!this.hasPremium) {
+                qualityItems = qualityItems.filter(
+                    (item) => !this.isPremiumItem(item),
+                );
+            }
+
+            const targetQuality = qualityItems.sort((first, second) => {
+                const resFirst = this.getResolution(first);
+                const resSecond = this.getResolution(second);
+                if (resSecond !== resFirst) {
+                    return resSecond - resFirst;
+                }
+                if (this.hasPremium) {
+                    const isPremFirst = this.isPremiumItem(first) ? 1 : 0;
+                    const isPremSecond = this.isPremiumItem(second) ? 1 : 0;
+                    return isPremSecond - isPremFirst;
+                }
+                return 0;
+            })[0];
 
             if (targetQuality) {
-                targetQuality.click();
-                // Close the settings menu again instead of leaving it open.
-                player.querySelector('.ytp-settings-button')?.click();
+                const isAlreadySelected =
+                    targetQuality.getAttribute('aria-checked') === 'true' ||
+                    targetQuality.ariaChecked === 'true';
+
+                if (!isAlreadySelected) {
+                    targetQuality.click();
+                }
+
+                setTimeout(() => {
+                    this.isClicking = false;
+                }, this.CLICK_DELAY);
                 return;
             }
 
-            const qualityEntry = Array.from(
-                player.querySelectorAll('.ytp-panel-menu .ytp-menuitem'),
-            ).find((item) => /\b\d{3,4}p\b/.test(item.textContent));
-            if (qualityEntry) {
-                qualityEntry.click();
+            if (!subMenuOpened) {
+                const qualityEntry = Array.from(
+                    player.querySelectorAll('.ytp-panel-menu .ytp-menuitem'),
+                ).find((item) => /\b\d{3,4}p\b/.test(item.textContent));
+                if (qualityEntry) {
+                    qualityEntry.click();
+                    subMenuOpened = true;
+                }
             }
 
             if (retries > 0) {
                 setTimeout(
-                    () => this.waitForQualityMenu(player, retries - 1),
-                    300,
+                    () =>
+                        this.waitForQualityMenu(
+                            player,
+                            retries - 1,
+                            subMenuOpened,
+                        ),
+                    this.CLICK_DELAY,
                 );
+            } else {
+                this.isClicking = false;
             }
         };
 
-        setTimeout(attemptApplyQuality, 300);
+        attemptApplyQuality();
     }
 
     getResolution(item) {

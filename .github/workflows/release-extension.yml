@@ -5,10 +5,10 @@ on:
         branches:
             - main
         paths:
-            - "extension/**"
-            - "build-chrome.sh"
-            - "build-firefox.sh"
-            - ".github/workflows/release-extension.yml"
+            - 'extension/**'
+            - 'build-chrome.sh'
+            - 'build-firefox.sh'
+            - '.github/workflows/release-extension.yml'
     workflow_dispatch:
 
 permissions:
