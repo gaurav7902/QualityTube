@@ -172,20 +172,17 @@ class YouTubeQualityController {
             const best = explicitLevels[0]; // YouTube returns levels best-first
             if (!best) return;
 
-            const current =
-                typeof player.getPlaybackQuality === 'function'
-                    ? player.getPlaybackQuality()
-                    : null;
-
-            // 'auto' is never considered "already at best" — only an explicit
-            // selection satisfies the requirement.
-            if (current !== null && current !== undefined && current === best) {
-                return; // already at best, nothing to do
-            }
-
+            // Always explicitly set the best quality. Do not skip based on
+            // getPlaybackQuality() because it may return the auto-resolved
+            // quality (e.g., "hd1080") even when the player is still on "auto",
+            // which means YouTube can later drop quality due to buffering.
+            // console.log(`[QualityTube] Available levels: ${explicitLevels.join(', ')}`);
+            // console.log(`[QualityTube] Best quality selected: ${best}`);
             if (typeof player.setPlaybackQualityRange === 'function') {
+                // console.log(`[QualityTube] Calling setPlaybackQualityRange(${best}, ${best})`);
                 player.setPlaybackQualityRange(best, best);
             } else if (typeof player.setPlaybackQuality === 'function') {
+                // console.log(`[QualityTube] Calling setPlaybackQuality(${best})`);
                 player.setPlaybackQuality(best);
             }
             return;
@@ -206,6 +203,7 @@ class YouTubeQualityController {
         if (!settingsButton) return;
 
         this.isClicking = true;
+        // console.log('[QualityTube] Clicking settings button');
         settingsButton.click();
 
         setTimeout(() => {
@@ -250,13 +248,21 @@ class YouTubeQualityController {
             })[0];
 
             if (targetQuality) {
+                const selectedQuality = targetQuality.textContent.trim();
                 const isAlreadySelected =
                     targetQuality.getAttribute('aria-checked') === 'true' ||
                     targetQuality.ariaChecked === 'true';
 
                 if (!isAlreadySelected) {
+                    // console.log(
+                    //     `[QualityTube] Clicking quality option: ${selectedQuality}`,
+                    // );
                     targetQuality.click();
                 }
+
+                // console.log(
+                //     `[QualityTube] Selected quality: ${selectedQuality}`,
+                // );
 
                 setTimeout(() => {
                     this.isClicking = false;
@@ -269,6 +275,7 @@ class YouTubeQualityController {
                     player.querySelectorAll('.ytp-panel-menu .ytp-menuitem'),
                 ).find((item) => /\b\d{3,4}p\b/.test(item.textContent));
                 if (qualityEntry) {
+                    // console.log('[QualityTube] Clicking quality submenu entry');
                     qualityEntry.click();
                     subMenuOpened = true;
                 }
