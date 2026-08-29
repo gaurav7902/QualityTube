@@ -25,7 +25,7 @@ jobs:
             - name: Read and validate extension versions
               id: version
               run: |
-                  set -euo pipefail
+                  set -euo pipefail -f
                   chrome_version="$(jq -r '.version' extension/chromium-based/manifest.json)"
                   firefox_version="$(jq -r '.version' extension/firefox/manifest.json)"
 
