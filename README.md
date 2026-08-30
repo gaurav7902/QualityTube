@@ -33,16 +33,6 @@ Click Here 👉
 [![Edge](https://img.shields.io/badge/Edge-Install-0078D7?logo=microsoft-edge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/codeforces-dark-theme/ahjnagbaenbiokkmamnjblanbejepfnh)
 --->
 
-### Firefox
-
-1. Download [`qualitytube-firefox-1.0.0.zip`](https://github.com/gaurav7902/QualityTube/raw/main/qualitytube-firefox-1.0.0.zip) from the repo root or the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.0).
-2. Open `about:debugging#/runtime/this-firefox`.
-3. Click **Load Temporary Add-on...**.
-4. Select `manifest.json` from the extracted folder.
-5. Open a YouTube watch page — the player should switch to the highest available resolution.
-
-> Firefox's `host_permissions` are opt-in. If quality isn't applied after install, open the extensions panel → this extension → _Permissions_ tab → allow `youtube.com`.
-
 ### Chrome / Edge / Brave
 
 1. Download [`qualitytube-chrome-1.0.0.zip`](https://github.com/gaurav7902/QualityTube/raw/main/qualitytube-chrome-1.0.0.zip) from the repo root or the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.0).
