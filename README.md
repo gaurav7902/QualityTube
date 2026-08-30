@@ -16,7 +16,22 @@
 
 QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 extension that automatically selects the highest quality YouTube makes available for each video, including 8K when offered. It only interacts with YouTube's visible player UI — never with ads, network traffic, or page scripts — so it stays friendly to YouTube's ad-blocker heuristics.
 
-## Quick install (developer mode)
+## Quick install
+
+### Firefox
+
+Available on addon store :)
+
+Click Here 👉
+[![Firefox](https://img.shields.io/badge/Firefox-Install-FF7139?logo=firefox&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/qualitytube/)
+<!---
+### Microsoft Edge
+
+Available on Microsoft Edge Add-ons
+
+Click Here 👉
+[![Edge](https://img.shields.io/badge/Edge-Install-0078D7?logo=microsoft-edge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/codeforces-dark-theme/ahjnagbaenbiokkmamnjblanbejepfnh)
+--->
 
 ### Firefox
 
