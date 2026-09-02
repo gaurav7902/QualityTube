@@ -20,7 +20,7 @@ jobs:
 
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+                              uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
             - name: Read and validate extension versions
               id: version
@@ -55,7 +55,7 @@ jobs:
                   git push
 
             - name: Create or update GitHub release
-              uses: softprops/action-gh-release@v2
+                              uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
               with:
                   tag_name: v${{ steps.version.outputs.version }}
                   name: QualityTube v${{ steps.version.outputs.version }}

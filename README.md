@@ -14,28 +14,23 @@
 
 ## Overview
 
-QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 extension that automatically selects the highest quality YouTube makes available for each video, including 8K when offered. It only interacts with YouTube's visible player UI — never with ads, network traffic, or page scripts — so it stays friendly to YouTube's ad-blocker heuristics.
+QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 extension that automatically selects the highest quality YouTube makes available for each video, including 8K when offered. It skips ads and does not inspect network traffic. It uses the player API when available and falls back to the visible player UI.
 
 ## Quick install
 
 ### Firefox
 
-Available on addon store :)
+1. Download [`qualitytube-firefox-1.0.2.zip`](https://github.com/gaurav7902/QualityTube/raw/main/qualitytube-firefox-1.0.2.zip) from the repo root or the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.2).
+2. Open `about:debugging#/runtime/this-firefox`.
+3. Click **Load Temporary Add-on...**.
+4. Select `manifest.json` from the extracted folder.
+5. Open a YouTube watch page — the player should switch to the highest available resolution.
 
-Click Here 👉
-[![Firefox](https://img.shields.io/badge/Firefox-Install-FF7139?logo=firefox&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/qualitytube/)
-<!---
-### Microsoft Edge
-
-Available on Microsoft Edge Add-ons
-
-Click Here 👉
-[![Edge](https://img.shields.io/badge/Edge-Install-0078D7?logo=microsoft-edge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/codeforces-dark-theme/ahjnagbaenbiokkmamnjblanbejepfnh)
---->
+> Firefox's `host_permissions` are opt-in. If quality isn't applied after install, open the extensions panel → this extension → _Permissions_ tab → allow `youtube.com`.
 
 ### Chrome / Edge / Brave
 
-1. Download [`qualitytube-chrome-1.0.0.zip`](https://github.com/gaurav7902/QualityTube/raw/main/qualitytube-chrome-1.0.0.zip) from the repo root or the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.0).
+1. Download [`qualitytube-chrome-1.0.2.zip`](https://github.com/gaurav7902/QualityTube/raw/main/qualitytube-chrome-1.0.2.zip) from the repo root or the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.2).
 2. Unzip the file to a local folder.
 3. Open your Chromium-based browser and go to `chrome://extensions/`, `edge://extensions/`, or `brave://extensions/` as appropriate.
 4. Enable **Developer mode** (top right).
@@ -44,7 +39,7 @@ Click Here 👉
 
 ## How it works
 
-The content script waits for YouTube's `#movie_player` (`.html5-video-player`) to load, then clicks the visible settings button, opens the quality submenu, and selects the menu item whose text contains the largest `\d{3,4}p` value. It re-applies on `yt-navigate-finish`, `yt-player-updated`, and `loadedmetadata` so SPA navigation and replays are covered. No player-internal APIs, network interception, or ad DOM selectors are used.
+The content script waits for YouTube's `#movie_player` (`.html5-video-player`) to load, then uses the player's available quality levels to select the highest explicit resolution. If those APIs are unavailable, it clicks the visible settings button and selects the menu item containing the largest `\d{3,4}p` value. It re-applies on `yt-navigate-finish`, `yt-player-updated`, and `loadedmetadata` so SPA navigation and replays are covered, and skips ad playback.
 
 ## Packaging
 
@@ -59,7 +54,7 @@ Pushing a change to `extension/**`, `build-chrome.sh`, `build-firefox.sh`, or th
 
 ## Privacy
 
-QualityTube requests only the `https://www.youtube.com/*` host permission, has no background service worker, and does not collect, transmit, or sell any data. All extension files run locally; no network requests are made by the extension itself.
+QualityTube requests YouTube host access and `storage` permission for the Premium setting, has no background service worker, and does not collect, transmit, or sell any data. All extension files run locally; no network requests are made by the extension itself.
 
 ## Authors
 

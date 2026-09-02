@@ -125,66 +125,58 @@ class YouTubeQualityController {
             return;
         }
 
-        if (typeof player.getAvailableQualityData === 'function') {
-            const qualityData = player.getAvailableQualityData();
-            const hasPaygatedOption =
-                Array.isArray(qualityData) &&
-                qualityData.some(
-                    (item) =>
-                        item.paygatedQualityDetails ||
-                        (item.qualityLabel &&
-                            /premium|enhanced bitrate/i.test(
-                                item.qualityLabel,
-                            )),
+        try {
+            if (typeof player.getAvailableQualityData === 'function') {
+                const qualityData = player.getAvailableQualityData();
+                const hasPaygatedOption =
+                    Array.isArray(qualityData) &&
+                    qualityData.some(
+                        (item) =>
+                            item.paygatedQualityDetails ||
+                            (item.qualityLabel &&
+                                /premium|enhanced bitrate/i.test(
+                                    item.qualityLabel,
+                                )),
+                    );
+
+                if (this.hasPremium && hasPaygatedOption) {
+                    const currentLabel =
+                        typeof player.getPlaybackQualityLabel === 'function'
+                            ? player.getPlaybackQualityLabel()
+                            : null;
+                    if (
+                        currentLabel &&
+                        /premium|enhanced bitrate/i.test(currentLabel)
+                    ) {
+                        return;
+                    }
+                    this.setQualityViaUI(player);
+                    return;
+                }
+            }
+
+            if (typeof player.getAvailableQualityLevels === 'function') {
+                const levels = player.getAvailableQualityLevels();
+                if (!levels || levels.length === 0) return;
+
+                const explicitLevels = levels.filter(
+                    (level) =>
+                        typeof level === 'string' &&
+                        level.toLowerCase() !== 'auto',
                 );
 
-            if (this.hasPremium && hasPaygatedOption) {
-                const currentLabel =
-                    typeof player.getPlaybackQualityLabel === 'function'
-                        ? player.getPlaybackQualityLabel()
-                        : null;
-                if (
-                    currentLabel &&
-                    /premium|enhanced bitrate/i.test(currentLabel)
-                ) {
-                    return; // already on Enhanced Bitrate, nothing to do
+                const best = explicitLevels[0];
+                if (!best) return;
+
+                if (typeof player.setPlaybackQualityRange === 'function') {
+                    player.setPlaybackQualityRange(best, best);
+                } else if (typeof player.setPlaybackQuality === 'function') {
+                    player.setPlaybackQuality(best);
                 }
-                this.setQualityViaUI(player);
                 return;
             }
-        }
-
-        // Preferred path: call the player's own API directly. This is the
-        // same interface YouTube's IFrame Player API uses, so it's stable
-        // and doesn't require simulating any clicks.
-        if (typeof player.getAvailableQualityLevels === 'function') {
-            const levels = player.getAvailableQualityLevels();
-            if (!levels || levels.length === 0) return;
-
-            // 'auto' is not an explicit quality. Never treat it as "best" —
-            // filter it out so we always select a concrete level rather than
-            // leaving the player free to throttle based on network conditions.
-            const explicitLevels = levels.filter(
-                (level) =>
-                    typeof level === 'string' && level.toLowerCase() !== 'auto',
-            );
-
-            const best = explicitLevels[0]; // YouTube returns levels best-first
-            if (!best) return;
-
-            // Always explicitly set the best quality. Do not skip based on
-            // getPlaybackQuality() because it may return the auto-resolved
-            // quality (e.g., "hd1080") even when the player is still on "auto",
-            // which means YouTube can later drop quality due to buffering.
-            // console.log(`[QualityTube] Available levels: ${explicitLevels.join(', ')}`);
-            // console.log(`[QualityTube] Best quality selected: ${best}`);
-            if (typeof player.setPlaybackQualityRange === 'function') {
-                // console.log(`[QualityTube] Calling setPlaybackQualityRange(${best}, ${best})`);
-                player.setPlaybackQualityRange(best, best);
-            } else if (typeof player.setPlaybackQuality === 'function') {
-                // console.log(`[QualityTube] Calling setPlaybackQuality(${best})`);
-                player.setPlaybackQuality(best);
-            }
+        } catch (_error) {
+            this.queueQuality(1500);
             return;
         }
 
@@ -211,10 +203,17 @@ class YouTubeQualityController {
         }, this.CLICK_DELAY);
     }
 
+    closeSettingsMenu(player) {
+        if (!player.classList.contains('ytp-settings-menu-visible')) return;
+        const settingsButton = player.querySelector('.ytp-settings-button');
+        if (settingsButton) settingsButton.click();
+    }
+
     waitForQualityMenu(player, retries = 5, subMenuOpened = false) {
         const attemptApplyQuality = () => {
             // Bail immediately if an ad started while we were waiting.
             if (this.isAdShowing(player)) {
+                this.closeSettingsMenu(player);
                 this.isClicking = false;
                 return;
             }
@@ -265,6 +264,7 @@ class YouTubeQualityController {
                 // );
 
                 setTimeout(() => {
+                    this.closeSettingsMenu(player);
                     this.isClicking = false;
                 }, this.CLICK_DELAY);
                 return;
@@ -292,6 +292,7 @@ class YouTubeQualityController {
                     this.CLICK_DELAY,
                 );
             } else {
+                this.closeSettingsMenu(player);
                 this.isClicking = false;
             }
         };
