@@ -1,15 +1,22 @@
-// YouTube Auto Quality - Content Script (corrected)
+// YouTube Auto Quality - Content Script
 //
-// Key changes from the original:
-// 1. Prefers the player's built-in API (same methods as YouTube's IFrame
-//    Player API) instead of simulating clicks through the settings menu.
-//    This avoids touching the visible UI at all in the common case.
-// 2. Explicitly detects and skips ad playback, so it never tries to open
-//    a quality menu that doesn't exist mid-ad.
-// 3. Skips work entirely if the video is already at the best quality.
-// 4. UI-click path (only used as a fallback) closes the settings menu
-//    again afterward instead of leaving it open, and bails immediately
-//    if an ad starts mid-attempt.
+// 1. Ads: never touches the UI while `ad-showing`/`ad-interrupting` is on
+//    the player; just re-checks shortly after.
+// 2. Applying quality is ALWAYS done via real clicks (Settings -> Quality
+//    -> resolution), for both premium and non-premium. The legacy
+//    player.setPlaybackQuality()/setPlaybackQualityRange() calls were
+//    removed: YouTube no longer reliably honors them on the watch page,
+//    which is what caused it to work on some videos/accounts and silently
+//    do nothing on others.
+// 3. "Already at highest" is checked internally (no clicking) by
+//    remembering {videoId, premium} the last time we actually applied a
+//    quality. A fresh video always goes through the click flow at least
+//    once, even if YouTube's own "Auto" already happens to be rendering
+//    the top resolution — Auto picking the right resolution doesn't count
+//    as "set".
+// 4. The settings menu is closed again after selecting a quality (YouTube
+//    normally does this itself, but we close it explicitly as a safety
+//    net), and any attempt bails out cleanly if an ad starts mid-attempt.
 
 class YouTubeQualityController {
     constructor() {
@@ -17,6 +24,8 @@ class YouTubeQualityController {
         this.isClicking = false;
         this.CLICK_DELAY = 300;
         this.hasPremium = false;
+        this.storageReady = false;
+        this.lastApplied = null; // {videoId, premium} of the last video we explicitly set quality on
         this.initStorage();
         this.initialize();
     }
@@ -28,7 +37,11 @@ class YouTubeQualityController {
                 if (items) {
                     this.hasPremium = !!items.hasPremium;
                 }
+                this.storageReady = true;
+                this.queueQuality(100);
             });
+        } else {
+            this.storageReady = true;
         }
 
         const storageArea =
@@ -113,9 +126,30 @@ class YouTubeQualityController {
         return false;
     }
 
+    // Best-effort stable id for "which video is this", so we can remember
+    // that we've already applied quality to it without re-opening the
+    // settings menu just to check.
+    getVideoId(player) {
+        try {
+            if (typeof player.getVideoData === 'function') {
+                const data = player.getVideoData();
+                if (data && data.video_id) return data.video_id;
+            }
+        } catch (_error) {
+            /* ignore */
+        }
+        try {
+            const match = location.href.match(/[?&]v=([^&]+)/);
+            if (match) return match[1];
+        } catch (_error) {
+            /* ignore */
+        }
+        return null;
+    }
+
     setQuality() {
         const player = this.getPlayer();
-        if (!player || this.isClicking) return;
+        if (!player || this.isClicking || !this.storageReady) return;
 
         // No quality menu exists during an ad, and poking at player
         // controls mid-ad is exactly the kind of thing that causes odd
@@ -125,66 +159,27 @@ class YouTubeQualityController {
             return;
         }
 
-        try {
-            if (typeof player.getAvailableQualityData === 'function') {
-                const qualityData = player.getAvailableQualityData();
-                const hasPaygatedOption =
-                    Array.isArray(qualityData) &&
-                    qualityData.some(
-                        (item) =>
-                            item.paygatedQualityDetails ||
-                            (item.qualityLabel &&
-                                /premium|enhanced bitrate/i.test(
-                                    item.qualityLabel,
-                                )),
-                    );
+        const videoId = this.getVideoId(player);
 
-                if (this.hasPremium && hasPaygatedOption) {
-                    const currentLabel =
-                        typeof player.getPlaybackQualityLabel === 'function'
-                            ? player.getPlaybackQualityLabel()
-                            : null;
-                    if (
-                        currentLabel &&
-                        /premium|enhanced bitrate/i.test(currentLabel)
-                    ) {
-                        return;
-                    }
-                    this.setQualityViaUI(player);
-                    return;
-                }
-            }
-
-            if (typeof player.getAvailableQualityLevels === 'function') {
-                const levels = player.getAvailableQualityLevels();
-                if (!levels || levels.length === 0) return;
-
-                const explicitLevels = levels.filter(
-                    (level) =>
-                        typeof level === 'string' &&
-                        level.toLowerCase() !== 'auto',
-                );
-
-                const best = explicitLevels[0];
-                if (!best) return;
-
-                if (typeof player.setPlaybackQualityRange === 'function') {
-                    player.setPlaybackQualityRange(best, best);
-                } else if (typeof player.setPlaybackQuality === 'function') {
-                    player.setPlaybackQuality(best);
-                }
-                return;
-            }
-        } catch (_error) {
-            this.queueQuality(1500);
+        // Internal-only "already handled" check — no clicking involved.
+        // We deliberately do NOT treat "current resolution happens to be
+        // the highest" as good enough, because that can just be YouTube's
+        // own Auto pick, which does not count as "already set". We only
+        // skip once *we* have explicitly applied a quality to this exact
+        // video for the current premium/non-premium mode.
+        if (
+            this.lastApplied &&
+            videoId &&
+            this.lastApplied.videoId === videoId &&
+            this.lastApplied.premium === this.hasPremium
+        ) {
             return;
         }
 
-        // Fallback only: the API wasn't available for some reason.
-        this.setQualityViaUI(player);
+        this.setQualityViaUI(player, videoId);
     }
 
-    setQualityViaUI(player) {
+    setQualityViaUI(player, videoId) {
         if (
             this.isClicking ||
             player.classList.contains('ytp-settings-menu-visible')
@@ -199,7 +194,7 @@ class YouTubeQualityController {
         settingsButton.click();
 
         setTimeout(() => {
-            this.waitForQualityMenu(player);
+            this.waitForQualityMenu(player, 5, false, videoId);
         }, this.CLICK_DELAY);
     }
 
@@ -209,9 +204,17 @@ class YouTubeQualityController {
         if (settingsButton) settingsButton.click();
     }
 
-    waitForQualityMenu(player, retries = 5, subMenuOpened = false) {
+    waitForQualityMenu(
+        player,
+        retries = 5,
+        subMenuOpened = false,
+        videoId = null,
+    ) {
         const attemptApplyQuality = () => {
             // Bail immediately if an ad started while we were waiting.
+            // Don't record lastApplied here — we haven't actually set
+            // anything, so the next attempt (once the ad ends) must run
+            // for real instead of being skipped as "already handled".
             if (this.isAdShowing(player)) {
                 this.closeSettingsMenu(player);
                 this.isClicking = false;
@@ -222,15 +225,11 @@ class YouTubeQualityController {
                 player.querySelectorAll(
                     ".ytp-quality-menu .ytp-menuitem, [role='menuitemradio']",
                 ),
-            ).filter((item) => /\b\d{3,4}p\b/.test(item.textContent));
+            ).filter((item) => this.getResolution(item) > 0);
 
-            let qualityItems = rawQualityItems;
-
-            if (!this.hasPremium) {
-                qualityItems = qualityItems.filter(
-                    (item) => !this.isPremiumItem(item),
-                );
-            }
+            const qualityItems = rawQualityItems.filter(
+                (item) => this.isPremiumItem(item) === this.hasPremium,
+            );
 
             const targetQuality = qualityItems.sort((first, second) => {
                 const resFirst = this.getResolution(first);
@@ -248,32 +247,39 @@ class YouTubeQualityController {
 
             if (targetQuality) {
                 const selectedQuality = targetQuality.textContent.trim();
-                const isAlreadySelected =
-                    targetQuality.getAttribute('aria-checked') === 'true' ||
-                    targetQuality.ariaChecked === 'true';
-
-                if (!isAlreadySelected) {
-                    // console.log(
-                    //     `[QualityTube] Clicking quality option: ${selectedQuality}`,
-                    // );
-                    targetQuality.click();
-                }
 
                 // console.log(
-                //     `[QualityTube] Selected quality: ${selectedQuality}`,
+                //     `[QualityTube] Clicking quality option: ${selectedQuality}`,
                 // );
+                targetQuality.click();
 
-                setTimeout(() => {
-                    this.closeSettingsMenu(player);
-                    this.isClicking = false;
-                }, this.CLICK_DELAY);
+                // No closeSettingsMenu() here: YouTube closes the settings
+                // pane on its own the moment a quality option is picked.
+                // Calling it ourselves right after was just re-clicking the
+                // settings button and popping the (already-closed) pane
+                // back open.
+                this.isClicking = false;
+                // Remember that this video has been handled for the
+                // current premium mode, so future triggers (player
+                // updates, loadedmetadata, etc.) for the same video
+                // skip straight past the internal check above instead
+                // of re-opening the menu.
+                if (videoId) {
+                    this.lastApplied = {
+                        videoId,
+                        premium: this.hasPremium,
+                    };
+                }
                 return;
             }
 
             if (!subMenuOpened) {
                 const qualityEntry = Array.from(
                     player.querySelectorAll('.ytp-panel-menu .ytp-menuitem'),
-                ).find((item) => /\b\d{3,4}p\b/.test(item.textContent));
+                ).find((item) => {
+                    const label = item.querySelector('.ytp-menuitem-label');
+                    return label && label.textContent.trim() === 'Quality';
+                });
                 if (qualityEntry) {
                     // console.log('[QualityTube] Clicking quality submenu entry');
                     qualityEntry.click();
@@ -288,10 +294,14 @@ class YouTubeQualityController {
                             player,
                             retries - 1,
                             subMenuOpened,
+                            videoId,
                         ),
                     this.CLICK_DELAY,
                 );
             } else {
+                // Ran out of retries without finding a quality item
+                // (e.g. menu didn't render in time) — don't mark this
+                // video as handled, so the next trigger tries again.
                 this.closeSettingsMenu(player);
                 this.isClicking = false;
             }
@@ -301,7 +311,7 @@ class YouTubeQualityController {
     }
 
     getResolution(item) {
-        const match = item.textContent.match(/\b(\d{3,4})p\b/);
+        const match = item.textContent.match(/\b(\d{3,4})p(?:\d+)?\b/i);
         return match ? Number(match[1]) : 0;
     }
 }
