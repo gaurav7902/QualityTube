@@ -14,21 +14,27 @@
 
 ## Overview
 
-QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 extension that automatically selects the highest quality YouTube makes available for each video, including 8K when offered. It skips ads and does not inspect network traffic. It uses the player API when available and falls back to the visible player UI.
+QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 extension that waits for the active YouTube ad to finish and then opens the player settings to choose the highest available quality for the current account mode. If the user is flagged as Premium, it only considers enhanced-bitrate entries; otherwise it ignores premium-only entries. It never treats YouTube's Auto-selected resolution as “already set” and remembers each video ID plus premium mode internally so it does not keep reopening the settings menu just to check.
 
 ## Quick install
 
 ### Firefox
 
-1. Download [`qualitytube-firefox-1.0.2.zip`](https://github.com/gaurav7902/QualityTube/raw/main/qualitytube-firefox-1.0.2.zip) from the repo root or the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.2).
-2. Open `about:debugging#/runtime/this-firefox`.
-3. Click **Load Temporary Add-on...**.
-4. Select `manifest.json` from the extracted folder.
-5. Open a YouTube watch page — the player should switch to the highest available resolution.
+Available on addon store :)
+
+Click Here 👉
+[![Firefox](https://img.shields.io/badge/Firefox-Install-FF7139?logo=firefox&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/qualitytube/)
 
 > Firefox's `host_permissions` are opt-in. If quality isn't applied after install, open the extensions panel → this extension → _Permissions_ tab → allow `youtube.com`.
 
 ### Chrome / Edge / Brave
+
+<!-- ### Microsoft Edge
+
+Available on Microsoft Edge Add-ons
+
+Click Here 👉
+[![Edge](https://img.shields.io/badge/Edge-Install-0078D7?logo=microsoft-edge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/codeforces-dark-theme/ahjnagbaenbiokkmamnjblanbejepfnh) -->
 
 1. Download [`qualitytube-chrome-1.0.2.zip`](https://github.com/gaurav7902/QualityTube/raw/main/qualitytube-chrome-1.0.2.zip) from the repo root or the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.2).
 2. Unzip the file to a local folder.
@@ -39,7 +45,7 @@ QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 exten
 
 ## How it works
 
-The content script waits for YouTube's `#movie_player` (`.html5-video-player`) to load, then uses the player's available quality levels to select the highest explicit resolution. If those APIs are unavailable, it clicks the visible settings button and selects the menu item containing the largest `\d{3,4}p` value. It re-applies on `yt-navigate-finish`, `yt-player-updated`, and `loadedmetadata` so SPA navigation and replays are covered, and skips ad playback.
+The content script waits for YouTube's `#movie_player` to exist, then rechecks on navigation and player updates. It deliberately does nothing while an ad is active, and only after the ad ends does it open the visible settings menu, navigate to Quality, and click the highest allowed item for the current premium mode. Premium users only see enhanced-bitrate quality entries; non-premium users ignore premium-only entries. It tracks the last explicitly applied video ID plus premium state internally so it can skip re-checking without opening the UI again, even when YouTube has automatically selected a high resolution.
 
 ## Packaging
 
