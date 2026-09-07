@@ -126,6 +126,12 @@ class YouTubeQualityController {
         return false;
     }
 
+    isSuperResolutionItem(item) {
+        if (!item) return false;
+        const text = (item.textContent || '').toLowerCase();
+        return text.includes('super resolution');
+    }
+
     // Best-effort stable id for "which video is this", so we can remember
     // that we've already applied quality to it without re-opening the
     // settings menu just to check.
@@ -227,21 +233,26 @@ class YouTubeQualityController {
                 ),
             ).filter((item) => this.getResolution(item) > 0);
 
-            const qualityItems = rawQualityItems.filter(
-                (item) => this.isPremiumItem(item) === this.hasPremium,
-            );
+            const qualityItems = rawQualityItems.filter((item) => {
+                if (this.isSuperResolutionItem(item)) {
+                    return true;
+                }
+                return this.isPremiumItem(item) === this.hasPremium;
+            });
 
             const targetQuality = qualityItems.sort((first, second) => {
-                const resFirst = this.getResolution(first);
-                const resSecond = this.getResolution(second);
-                if (resSecond !== resFirst) {
-                    return resSecond - resFirst;
+                const firstSuper = this.isSuperResolutionItem(first) ? 1 : 0;
+                const secondSuper = this.isSuperResolutionItem(second) ? 1 : 0;
+                if (firstSuper !== secondSuper) {
+                    return secondSuper - firstSuper;
                 }
-                if (this.hasPremium) {
-                    const isPremFirst = this.isPremiumItem(first) ? 1 : 0;
-                    const isPremSecond = this.isPremiumItem(second) ? 1 : 0;
+
+                const isPremFirst = this.isPremiumItem(first) ? 1 : 0;
+                const isPremSecond = this.isPremiumItem(second) ? 1 : 0;
+                if (isPremFirst !== isPremSecond) {
                     return isPremSecond - isPremFirst;
                 }
+
                 return 0;
             })[0];
 

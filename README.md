@@ -47,6 +47,20 @@ Click Here 👉
 
 The content script waits for YouTube's `#movie_player` to exist, then rechecks on navigation and player updates. It deliberately does nothing while an ad is active, and only after the ad ends does it open the visible settings menu, navigate to Quality, and click the highest allowed item for the current premium mode. Premium users only see enhanced-bitrate quality entries; non-premium users ignore premium-only entries. It tracks the last explicitly applied video ID plus premium state internally so it can skip re-checking without opening the UI again, even when YouTube has automatically selected a high resolution.
 
+## Quality Selection Algorithm
+
+The extension does not rely on YouTube's `Auto` option or on a numeric FPS/resolution comparison. In the current YouTube menu, the practical choice is driven by the available quality labels, and the extension picks the first eligible item in the menu order after filtering.
+
+Selection works like this:
+
+- If a quality item is labeled `Super Resolution`, it is treated as a valid choice for both premium and non-premium users.
+- If the user is premium, items labeled `Enhanced bitrate` or `Premium` are also allowed.
+- If the user is not premium, premium-only entries are ignored.
+- `Auto` is never treated as a valid target and is skipped.
+- After filtering, the extension prefers `Super Resolution` entries first, then premium-marked entries when relevant, and then clicks the first matching item.
+
+This means the extension intentionally selects the best available labeled quality for the current account mode, rather than comparing resolution values like 1080p/1440p/2160p numerically.
+
 ## Packaging
 
 Two shell scripts at the project root build the release archives and match the names produced by the GitHub Actions workflow in `.github/workflows/release-extension.yml`:
