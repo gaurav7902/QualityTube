@@ -7,6 +7,7 @@
     - [Firefox](#firefox)
     - [Chrome / Edge / Brave](#chrome--edge--brave)
 - [How it works](#how-it-works)
+- [Settings](#settings)
 - [Packaging](#packaging)
 - [Privacy](#privacy)
 - [Authors](#authors)
@@ -14,7 +15,7 @@
 
 ## Overview
 
-QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 extension that waits for the active YouTube ad to finish and then opens the player settings to choose the highest available quality for the current account mode. If the user is flagged as Premium, it only considers enhanced-bitrate entries; otherwise it ignores premium-only entries. It never treats YouTube's Auto-selected resolution as “already set” and remembers each video ID plus premium mode internally so it does not keep reopening the settings menu just to check.
+QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 extension that waits for the active YouTube ad to finish and then opens the player settings to choose the highest available quality for the current account mode. If the user is flagged as Premium, it allows enhanced-bitrate entries; otherwise it ignores premium-only entries. It never treats YouTube's Auto-selected resolution as “already set” and remembers each video ID plus premium mode during the current page session so it does not keep reopening the settings menu just to check.
 
 ## Quick install
 
@@ -60,6 +61,15 @@ Selection works like this:
 - After filtering, the extension prefers `Super Resolution` entries first, then premium-marked entries when relevant, and then clicks the first matching item.
 
 This means the extension intentionally selects the best available labeled quality for the current account mode, rather than comparing resolution values like 1080p/1440p/2160p numerically.
+
+## Settings
+
+The popup provides two controls:
+
+- **Enable automatic quality** pauses and resumes the extension without removing it.
+- **Do you have premium?** allows Premium enhanced-bitrate entries when available.
+
+The extension remembers handled video and account-mode combinations during the current page session. A full page reload starts a fresh session and applies quality again.
 
 ## Packaging
 

@@ -8,12 +8,10 @@
 //    removed: YouTube no longer reliably honors them on the watch page,
 //    which is what caused it to work on some videos/accounts and silently
 //    do nothing on others.
-// 3. "Already at highest" is checked internally (no clicking) by
-//    remembering {videoId, premium} the last time we actually applied a
-//    quality. A fresh video always goes through the click flow at least
-//    once, even if YouTube's own "Auto" already happens to be rendering
-//    the top resolution — Auto picking the right resolution doesn't count
-//    as "set".
+// 3. "Already at highest" is checked internally (no clicking) for the
+//    current page session. A refreshed page goes through the click flow
+//    again, even if YouTube's own "Auto" is already rendering the top
+//    resolution.
 // 4. The settings menu is closed again after selecting a quality (YouTube
 //    normally does this itself, but we close it explicitly as a safety
 //    net), and any attempt bails out cleanly if an ad starts mid-attempt.
@@ -24,8 +22,11 @@ class YouTubeQualityController {
         this.isClicking = false;
         this.CLICK_DELAY = 300;
         this.hasPremium = false;
+        this.enabled = true;
         this.storageReady = false;
-        this.lastApplied = null; // {videoId, premium} of the last video we explicitly set quality on
+        this.appliedVideos = {};
+        this.activeVideoId = null;
+        this.operationToken = 0;
         this.initStorage();
         this.initialize();
     }
@@ -33,9 +34,10 @@ class YouTubeQualityController {
     initStorage() {
         const storage = this.getStorage();
         if (storage) {
-            storage.get({hasPremium: false}, (items) => {
+            this.storageGet(storage, {hasPremium: false, enabled: true}, (items) => {
                 if (items) {
                     this.hasPremium = !!items.hasPremium;
+                    this.enabled = items.enabled !== false;
                 }
                 this.storageReady = true;
                 this.queueQuality(100);
@@ -53,8 +55,10 @@ class YouTubeQualityController {
 
         if (storageArea && storageArea.onChanged) {
             storageArea.onChanged.addListener((changes) => {
-                if (changes.hasPremium) {
-                    this.hasPremium = !!changes.hasPremium.newValue;
+                if (changes.hasPremium || changes.enabled) {
+                    if (changes.hasPremium) this.hasPremium = !!changes.hasPremium.newValue;
+                    if (changes.enabled) this.enabled = changes.enabled.newValue !== false;
+                    this.operationToken += 1;
                     this.queueQuality(100);
                 }
             });
@@ -71,8 +75,18 @@ class YouTubeQualityController {
         return null;
     }
 
+    storageGet(storage, defaults, callback) {
+        try {
+            const result = storage.get(defaults, callback);
+            if (result && typeof result.then === 'function') result.then(callback);
+        } catch (_error) {
+            storage.get(defaults).then(callback);
+        }
+    }
+
     initialize() {
         document.addEventListener('yt-navigate-finish', () => {
+            this.operationToken += 1;
             this.queueQuality(1500);
         });
 
@@ -155,7 +169,7 @@ class YouTubeQualityController {
 
     setQuality() {
         const player = this.getPlayer();
-        if (!player || this.isClicking || !this.storageReady) return;
+        if (!player || this.isClicking || !this.storageReady || !this.enabled) return;
 
         // No quality menu exists during an ad, and poking at player
         // controls mid-ad is exactly the kind of thing that causes odd
@@ -166,18 +180,16 @@ class YouTubeQualityController {
         }
 
         const videoId = this.getVideoId(player);
+        if (videoId !== this.activeVideoId) {
+            this.activeVideoId = videoId;
+            this.operationToken += 1;
+        }
 
-        // Internal-only "already handled" check — no clicking involved.
-        // We deliberately do NOT treat "current resolution happens to be
-        // the highest" as good enough, because that can just be YouTube's
-        // own Auto pick, which does not count as "already set". We only
-        // skip once *we* have explicitly applied a quality to this exact
-        // video for the current premium/non-premium mode.
+        // Skip repeated player-update events after this page has applied a
+        // quality to this exact video and account mode.
         if (
-            this.lastApplied &&
             videoId &&
-            this.lastApplied.videoId === videoId &&
-            this.lastApplied.premium === this.hasPremium
+            this.appliedVideos[`${videoId}:${this.hasPremium ? 'premium' : 'standard'}`]
         ) {
             return;
         }
@@ -196,11 +208,12 @@ class YouTubeQualityController {
         if (!settingsButton) return;
 
         this.isClicking = true;
+        const operationToken = this.operationToken;
         // console.log('[QualityTube] Clicking settings button');
         settingsButton.click();
 
         setTimeout(() => {
-            this.waitForQualityMenu(player, 5, false, videoId);
+            this.waitForQualityMenu(player, 5, false, videoId, operationToken);
         }, this.CLICK_DELAY);
     }
 
@@ -215,10 +228,16 @@ class YouTubeQualityController {
         retries = 5,
         subMenuOpened = false,
         videoId = null,
+        operationToken = this.operationToken,
     ) {
         const attemptApplyQuality = () => {
+            if (operationToken !== this.operationToken || videoId !== this.getVideoId(player)) {
+                this.closeSettingsMenu(player);
+                this.isClicking = false;
+                return;
+            }
             // Bail immediately if an ad started while we were waiting.
-            // Don't record lastApplied here — we haven't actually set
+            // Don't record this video here — we haven't actually set
             // anything, so the next attempt (once the ad ends) must run
             // for real instead of being skipped as "already handled".
             if (this.isAdShowing(player)) {
@@ -231,13 +250,13 @@ class YouTubeQualityController {
                 player.querySelectorAll(
                     ".ytp-quality-menu .ytp-menuitem, [role='menuitemradio']",
                 ),
-            ).filter((item) => this.getResolution(item) > 0);
+            ).filter((item) => this.getResolution(item) > 0 || this.isSuperResolutionItem(item));
 
             const qualityItems = rawQualityItems.filter((item) => {
                 if (this.isSuperResolutionItem(item)) {
                     return true;
                 }
-                return this.isPremiumItem(item) === this.hasPremium;
+                return this.hasPremium || !this.isPremiumItem(item);
             });
 
             const targetQuality = qualityItems.sort((first, second) => {
@@ -247,13 +266,7 @@ class YouTubeQualityController {
                     return secondSuper - firstSuper;
                 }
 
-                const isPremFirst = this.isPremiumItem(first) ? 1 : 0;
-                const isPremSecond = this.isPremiumItem(second) ? 1 : 0;
-                if (isPremFirst !== isPremSecond) {
-                    return isPremSecond - isPremFirst;
-                }
-
-                return 0;
+                return this.getResolution(second) - this.getResolution(first);
             })[0];
 
             if (targetQuality) {
@@ -270,16 +283,10 @@ class YouTubeQualityController {
                 // settings button and popping the (already-closed) pane
                 // back open.
                 this.isClicking = false;
-                // Remember that this video has been handled for the
-                // current premium mode, so future triggers (player
-                // updates, loadedmetadata, etc.) for the same video
-                // skip straight past the internal check above instead
-                // of re-opening the menu.
                 if (videoId) {
-                    this.lastApplied = {
-                        videoId,
-                        premium: this.hasPremium,
-                    };
+                    this.appliedVideos[
+                        `${videoId}:${this.hasPremium ? 'premium' : 'standard'}`
+                    ] = true;
                 }
                 return;
             }
@@ -306,6 +313,7 @@ class YouTubeQualityController {
                             retries - 1,
                             subMenuOpened,
                             videoId,
+                            operationToken,
                         ),
                     this.CLICK_DELAY,
                 );
