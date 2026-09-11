@@ -2,12 +2,8 @@
 //
 // 1. Ads: never touches the UI while `ad-showing`/`ad-interrupting` is on
 //    the player; just re-checks shortly after.
-// 2. Applying quality is ALWAYS done via real clicks (Settings -> Quality
-//    -> resolution), for both premium and non-premium. The legacy
-//    player.setPlaybackQuality()/setPlaybackQualityRange() calls were
-//    removed: YouTube no longer reliably honors them on the watch page,
-//    which is what caused it to work on some videos/accounts and silently
-//    do nothing on others.
+// 2. Applying quality first uses YouTube's player API without opening menus.
+//    The visible settings flow remains as a fallback when the API is ignored.
 // 3. "Already at highest" is checked internally (no clicking) for the
 //    current page session. A refreshed page goes through the click flow
 //    again, even if YouTube's own "Auto" is already rendering the top
@@ -21,6 +17,9 @@ class YouTubeQualityController {
         this.applyTimer = null;
         this.isClicking = false;
         this.CLICK_DELAY = 300;
+        this.MENU_OPEN_DELAY = 500;
+        this.MENU_RETRIES = 12;
+        this.API_VERIFY_DELAY = 1000;
         this.hasPremium = false;
         this.enabled = true;
         this.storageReady = false;
@@ -34,14 +33,18 @@ class YouTubeQualityController {
     initStorage() {
         const storage = this.getStorage();
         if (storage) {
-            this.storageGet(storage, {hasPremium: false, enabled: true}, (items) => {
-                if (items) {
-                    this.hasPremium = !!items.hasPremium;
-                    this.enabled = items.enabled !== false;
-                }
-                this.storageReady = true;
-                this.queueQuality(100);
-            });
+            this.storageGet(
+                storage,
+                {hasPremium: false, enabled: true},
+                (items) => {
+                    if (items) {
+                        this.hasPremium = !!items.hasPremium;
+                        this.enabled = items.enabled !== false;
+                    }
+                    this.storageReady = true;
+                    this.queueQuality(100);
+                },
+            );
         } else {
             this.storageReady = true;
         }
@@ -56,8 +59,10 @@ class YouTubeQualityController {
         if (storageArea && storageArea.onChanged) {
             storageArea.onChanged.addListener((changes) => {
                 if (changes.hasPremium || changes.enabled) {
-                    if (changes.hasPremium) this.hasPremium = !!changes.hasPremium.newValue;
-                    if (changes.enabled) this.enabled = changes.enabled.newValue !== false;
+                    if (changes.hasPremium)
+                        this.hasPremium = !!changes.hasPremium.newValue;
+                    if (changes.enabled)
+                        this.enabled = changes.enabled.newValue !== false;
                     this.operationToken += 1;
                     this.queueQuality(100);
                 }
@@ -78,7 +83,8 @@ class YouTubeQualityController {
     storageGet(storage, defaults, callback) {
         try {
             const result = storage.get(defaults, callback);
-            if (result && typeof result.then === 'function') result.then(callback);
+            if (result && typeof result.then === 'function')
+                result.then(callback);
         } catch (_error) {
             storage.get(defaults).then(callback);
         }
@@ -169,7 +175,8 @@ class YouTubeQualityController {
 
     setQuality() {
         const player = this.getPlayer();
-        if (!player || this.isClicking || !this.storageReady || !this.enabled) return;
+        if (!player || this.isClicking || !this.storageReady || !this.enabled)
+            return;
 
         // No quality menu exists during an ad, and poking at player
         // controls mid-ad is exactly the kind of thing that causes odd
@@ -189,12 +196,85 @@ class YouTubeQualityController {
         // quality to this exact video and account mode.
         if (
             videoId &&
-            this.appliedVideos[`${videoId}:${this.hasPremium ? 'premium' : 'standard'}`]
+            this.appliedVideos[
+                `${videoId}:${this.hasPremium ? 'premium' : 'standard'}`
+            ]
         ) {
             return;
         }
 
-        this.setQualityViaUI(player, videoId);
+        if (!this.setQualityViaPlayerApi(player, videoId)) {
+            this.setQualityViaUI(player, videoId);
+        }
+    }
+
+    setQualityViaPlayerApi(player, videoId) {
+        if (
+            typeof player.getMaxPlaybackQuality !== 'function' ||
+            typeof player.setPlaybackQualityRange !== 'function'
+        ) {
+            return false;
+        }
+
+        let maxQuality;
+        try {
+            maxQuality = player.getMaxPlaybackQuality();
+            if (
+                !maxQuality ||
+                maxQuality === 'unknown' ||
+                maxQuality.toLowerCase() === 'auto'
+            ) {
+                return false;
+            }
+            player.setPlaybackQualityRange(maxQuality, maxQuality);
+        } catch (_error) {
+            return false;
+        }
+
+        this.isClicking = true;
+        const operationToken = this.operationToken;
+        setTimeout(() => {
+            if (
+                operationToken !== this.operationToken ||
+                videoId !== this.getVideoId(player) ||
+                this.isAdShowing(player)
+            ) {
+                this.isClicking = false;
+                return;
+            }
+
+            let applied = false;
+            try {
+                const currentQuality =
+                    typeof player.getPlaybackQuality === 'function'
+                        ? player.getPlaybackQuality()
+                        : '';
+                const currentLabel =
+                    typeof player.getPlaybackQualityLabel === 'function'
+                        ? player.getPlaybackQualityLabel()
+                        : '';
+                applied =
+                    currentQuality === maxQuality ||
+                    this.getQualityNumber(currentLabel) >=
+                        this.getQualityNumber(maxQuality);
+            } catch (_error) {
+                applied = false;
+            }
+
+            this.isClicking = false;
+            if (applied) {
+                if (videoId) {
+                    this.appliedVideos[
+                        `${videoId}:${this.hasPremium ? 'premium' : 'standard'}`
+                    ] = true;
+                }
+                return;
+            }
+
+            this.setQualityViaUI(player, videoId);
+        }, this.API_VERIFY_DELAY);
+
+        return true;
     }
 
     setQualityViaUI(player, videoId) {
@@ -213,8 +293,14 @@ class YouTubeQualityController {
         settingsButton.click();
 
         setTimeout(() => {
-            this.waitForQualityMenu(player, 5, false, videoId, operationToken);
-        }, this.CLICK_DELAY);
+            this.waitForQualityMenu(
+                player,
+                this.MENU_RETRIES,
+                false,
+                videoId,
+                operationToken,
+            );
+        }, this.MENU_OPEN_DELAY);
     }
 
     closeSettingsMenu(player) {
@@ -223,15 +309,33 @@ class YouTubeQualityController {
         if (settingsButton) settingsButton.click();
     }
 
+    getVisibleSettingsMenu(player) {
+        return Array.from(player.querySelectorAll('.ytp-settings-menu')).find(
+            (menu) => {
+                const style = window.getComputedStyle(menu);
+                return (
+                    !menu.hidden &&
+                    menu.getAttribute('aria-hidden') !== 'true' &&
+                    style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    menu.getClientRects().length > 0
+                );
+            },
+        );
+    }
+
     waitForQualityMenu(
         player,
-        retries = 5,
+        retries = this.MENU_RETRIES,
         subMenuOpened = false,
         videoId = null,
         operationToken = this.operationToken,
     ) {
         const attemptApplyQuality = () => {
-            if (operationToken !== this.operationToken || videoId !== this.getVideoId(player)) {
+            if (
+                operationToken !== this.operationToken ||
+                videoId !== this.getVideoId(player)
+            ) {
                 this.closeSettingsMenu(player);
                 this.isClicking = false;
                 return;
@@ -246,11 +350,19 @@ class YouTubeQualityController {
                 return;
             }
 
-            const rawQualityItems = Array.from(
-                player.querySelectorAll(
-                    ".ytp-quality-menu .ytp-menuitem, [role='menuitemradio']",
-                ),
-            ).filter((item) => this.getResolution(item) > 0 || this.isSuperResolutionItem(item));
+            const settingsMenu = this.getVisibleSettingsMenu(player);
+            const rawQualityItems =
+                subMenuOpened && settingsMenu
+                    ? Array.from(
+                          settingsMenu.querySelectorAll(
+                              ".ytp-quality-menu .ytp-menuitem, [role='menuitemradio']",
+                          ),
+                      ).filter(
+                          (item) =>
+                              this.getResolution(item) > 0 ||
+                              this.isSuperResolutionItem(item),
+                      )
+                    : [];
 
             const qualityItems = rawQualityItems.filter((item) => {
                 if (this.isSuperResolutionItem(item)) {
@@ -291,12 +403,20 @@ class YouTubeQualityController {
                 return;
             }
 
-            if (!subMenuOpened) {
+            if (!subMenuOpened && settingsMenu) {
                 const qualityEntry = Array.from(
-                    player.querySelectorAll('.ytp-panel-menu .ytp-menuitem'),
+                    settingsMenu.querySelectorAll(
+                        '.ytp-panel-menu .ytp-menuitem',
+                    ),
                 ).find((item) => {
                     const label = item.querySelector('.ytp-menuitem-label');
-                    return label && label.textContent.trim() === 'Quality';
+                    return (
+                        label &&
+                        label.textContent.replace(/\s+/g, ' ').trim() ===
+                            'Quality' &&
+                        item.getAttribute('role') === 'menuitem' &&
+                        item.getAttribute('aria-haspopup') === 'true'
+                    );
                 });
                 if (qualityEntry) {
                     // console.log('[QualityTube] Clicking quality submenu entry');
@@ -323,6 +443,7 @@ class YouTubeQualityController {
                 // video as handled, so the next trigger tries again.
                 this.closeSettingsMenu(player);
                 this.isClicking = false;
+                this.queueQuality(1500);
             }
         };
 
@@ -331,6 +452,11 @@ class YouTubeQualityController {
 
     getResolution(item) {
         const match = item.textContent.match(/\b(\d{3,4})p(?:\d+)?\b/i);
+        return match ? Number(match[1]) : 0;
+    }
+
+    getQualityNumber(value) {
+        const match = String(value || '').match(/(\d{3,4})/);
         return match ? Number(match[1]) : 0;
     }
 }

@@ -17,7 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const getStorage = (defaults, callback) => {
         try {
             const result = storage.get(defaults, callback);
-            if (result && typeof result.then === 'function') result.then(callback);
+            if (result && typeof result.then === 'function')
+                result.then(callback);
         } catch (_error) {
             storage.get(defaults).then(callback);
         }
@@ -26,7 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const setStorage = (values) => {
         try {
             const result = storage.set(values);
-            if (result && typeof result.catch === 'function') result.catch(() => {});
+            if (result && typeof result.catch === 'function')
+                result.catch(() => {});
         } catch (_error) {
             storage.set(values, () => {});
         }
@@ -35,8 +37,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (storage) {
         getStorage({hasPremium: false, enabled: true}, (items) => {
             if (items) {
-                if (premiumCheckbox) premiumCheckbox.checked = !!items.hasPremium;
-                if (enabledCheckbox) enabledCheckbox.checked = items.enabled !== false;
+                if (premiumCheckbox)
+                    premiumCheckbox.checked = !!items.hasPremium;
+                if (enabledCheckbox)
+                    enabledCheckbox.checked = items.enabled !== false;
             }
         });
 
