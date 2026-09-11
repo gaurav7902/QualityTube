@@ -1,13 +1,11 @@
 // YouTube Auto Quality - Content Script
 //
-// 1. Ads: never touches the UI while `ad-showing`/`ad-interrupting` is on
+// 1. Ads: never touches the UI while an ad state is active
 //    the player; just re-checks shortly after.
-// 2. Applying quality first uses YouTube's player API without opening menus.
-//    The visible settings flow remains as a fallback when the API is ignored.
-// 3. "Already at highest" is checked internally (no clicking) for the
-//    current page session. A refreshed page goes through the click flow
-//    again, even if YouTube's own "Auto" is already rendering the top
-//    resolution.
+// 2. Applying quality always uses the visible settings menu, so YouTube's
+//    adaptive "Auto" selection is never treated as good enough.
+// 3. A quality is applied once per video and account mode for the current
+//    page session. A refreshed page goes through the click flow again.
 // 4. The settings menu is closed again after selecting a quality (YouTube
 //    normally does this itself, but we close it explicitly as a safety
 //    net), and any attempt bails out cleanly if an ad starts mid-attempt.
@@ -19,7 +17,6 @@ class YouTubeQualityController {
         this.CLICK_DELAY = 300;
         this.MENU_OPEN_DELAY = 500;
         this.MENU_RETRIES = 12;
-        this.API_VERIFY_DELAY = 1000;
         this.hasPremium = false;
         this.enabled = true;
         this.storageReady = false;
@@ -203,78 +200,7 @@ class YouTubeQualityController {
             return;
         }
 
-        if (!this.setQualityViaPlayerApi(player, videoId)) {
-            this.setQualityViaUI(player, videoId);
-        }
-    }
-
-    setQualityViaPlayerApi(player, videoId) {
-        if (
-            typeof player.getMaxPlaybackQuality !== 'function' ||
-            typeof player.setPlaybackQualityRange !== 'function'
-        ) {
-            return false;
-        }
-
-        let maxQuality;
-        try {
-            maxQuality = player.getMaxPlaybackQuality();
-            if (
-                !maxQuality ||
-                maxQuality === 'unknown' ||
-                maxQuality.toLowerCase() === 'auto'
-            ) {
-                return false;
-            }
-            player.setPlaybackQualityRange(maxQuality, maxQuality);
-        } catch (_error) {
-            return false;
-        }
-
-        this.isClicking = true;
-        const operationToken = this.operationToken;
-        setTimeout(() => {
-            if (
-                operationToken !== this.operationToken ||
-                videoId !== this.getVideoId(player) ||
-                this.isAdShowing(player)
-            ) {
-                this.isClicking = false;
-                return;
-            }
-
-            let applied = false;
-            try {
-                const currentQuality =
-                    typeof player.getPlaybackQuality === 'function'
-                        ? player.getPlaybackQuality()
-                        : '';
-                const currentLabel =
-                    typeof player.getPlaybackQualityLabel === 'function'
-                        ? player.getPlaybackQualityLabel()
-                        : '';
-                applied =
-                    currentQuality === maxQuality ||
-                    this.getQualityNumber(currentLabel) >=
-                        this.getQualityNumber(maxQuality);
-            } catch (_error) {
-                applied = false;
-            }
-
-            this.isClicking = false;
-            if (applied) {
-                if (videoId) {
-                    this.appliedVideos[
-                        `${videoId}:${this.hasPremium ? 'premium' : 'standard'}`
-                    ] = true;
-                }
-                return;
-            }
-
-            this.setQualityViaUI(player, videoId);
-        }, this.API_VERIFY_DELAY);
-
-        return true;
+        this.setQualityViaUI(player, videoId);
     }
 
     setQualityViaUI(player, videoId) {
@@ -365,6 +291,8 @@ class YouTubeQualityController {
                     : [];
 
             const qualityItems = rawQualityItems.filter((item) => {
+                const label = item.textContent.trim();
+                if (/^auto\b/i.test(label)) return false;
                 if (this.isSuperResolutionItem(item)) {
                     return true;
                 }
