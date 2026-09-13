@@ -37,7 +37,7 @@ Available on Microsoft Edge Add-ons
 Click Here 👉
 [![Edge](https://img.shields.io/badge/Edge-Install-0078D7?logo=microsoft-edge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/codeforces-dark-theme/ahjnagbaenbiokkmamnjblanbejepfnh) -->
 
-1. Download [`qualitytube-chrome-1.0.2.zip`](https://github.com/gaurav7902/QualityTube/raw/main/qualitytube-chrome-1.0.2.zip) from the repo root or the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.2).
+1. Download from the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.9).
 2. Unzip the file to a local folder.
 3. Open your Chromium-based browser and go to `chrome://extensions/`, `edge://extensions/`, or `brave://extensions/` as appropriate.
 4. Enable **Developer mode** (top right).
@@ -54,22 +54,26 @@ The extension does not rely on YouTube's `Auto` option. It ranks the available e
 
 Selection works like this:
 
-- If a quality item is labeled `Super Resolution`, it is preferred over a numeric resolution.
-- Disabled entries are skipped.
+- If a quality item is labeled `Super Resolution`, it is always preferred over any numeric resolution.
+- Disabled entries are automatically skipped.
 - A choice is recorded only after YouTube marks it selected. A rejected tier is skipped and the next enabled choice is tried.
-- `Auto` is never treated as a valid target and is skipped.
-- After filtering, the extension prefers `Super Resolution`, then the greatest numeric resolution.
+- `Auto` is never treated as a valid target and is always skipped.
+- After filtering, the extension prefers `Super Resolution` first, then the greatest numeric resolution (8K → 4K → 1440p → 1080p → etc.).
 
 This means the extension selects the best eligible quality. Enable the YouTube Premium option when the account can use entries marked Premium or Enhanced bitrate.
+
+**Super Resolution Support**: The extension detects and prioritizes YouTube's Super Resolution option when available, which provides AI-enhanced quality beyond the source resolution.
 
 ## Settings
 
 The popup provides two controls:
+and Super Resolution. Leave it off for non-Premium accounts so those entries are skipped before any click.
 
-- **Enable automatic quality** pauses and resumes the extension without removing it.
+- **Restart after applying quality** is off by default. When enabled, it seeks to 0:00 after YouTube confirms the new quality; it does not start a paused video.
+
 - **YouTube Premium** allows entries marked by YouTube as Premium, including Enhanced bitrate. Leave it off for non-Premium accounts so those entries are skipped before any click.
 - **Restart after applying quality** is off by default. When enabled, it seeks to 0:00 after YouTube confirms the new quality; it does not start a paused video.
-The extension remembers the handled current video during the page session. A full page reload starts a fresh session and applies quality again.
+  The extension remembers the handled current video during the page session. A full page reload starts a fresh session and applies quality again.
 
 ## Packaging
 
