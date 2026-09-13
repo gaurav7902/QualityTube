@@ -4,23 +4,26 @@
 //    the player; just re-checks shortly after.
 // 2. Applying quality always uses the visible settings menu, so YouTube's
 //    adaptive "Auto" selection is never treated as good enough.
-// 3. A quality is applied once per video and account mode for the current
+// 3. A quality is applied once per video for the current
 //    page session. A refreshed page goes through the click flow again.
-// 4. The settings menu is closed again after selecting a quality (YouTube
-//    normally does this itself, but we close it explicitly as a safety
-//    net), and any attempt bails out cleanly if an ad starts mid-attempt.
+// 4. A quality is recorded only after YouTube marks it selected; unavailable
+//    tiers fall back to the next enabled item.
 
 class YouTubeQualityController {
     constructor() {
         this.applyTimer = null;
         this.isClicking = false;
+        this.isWaitingForSettings = false;
         this.CLICK_DELAY = 300;
         this.MENU_OPEN_DELAY = 500;
         this.MENU_RETRIES = 12;
-        this.hasPremium = false;
+        this.SETTINGS_READY_TIMEOUT = 3000;
         this.enabled = true;
+        this.hasPremium = false;
+        this.restartAfterQuality = false;
         this.storageReady = false;
         this.appliedVideos = {};
+        this.rejectedQualityLabels = new Set();
         this.activeVideoId = null;
         this.operationToken = 0;
         this.initStorage();
@@ -32,11 +35,12 @@ class YouTubeQualityController {
         if (storage) {
             this.storageGet(
                 storage,
-                {hasPremium: false, enabled: true},
+                {enabled: true, hasPremium: false, restartAfterQuality: false},
                 (items) => {
                     if (items) {
-                        this.hasPremium = !!items.hasPremium;
                         this.enabled = items.enabled !== false;
+                        this.hasPremium = !!items.hasPremium;
+                        this.restartAfterQuality = !!items.restartAfterQuality;
                     }
                     this.storageReady = true;
                     this.queueQuality(100);
@@ -55,9 +59,16 @@ class YouTubeQualityController {
 
         if (storageArea && storageArea.onChanged) {
             storageArea.onChanged.addListener((changes) => {
-                if (changes.hasPremium || changes.enabled) {
-                    if (changes.hasPremium)
-                        this.hasPremium = !!changes.hasPremium.newValue;
+                if (changes.hasPremium) {
+                    this.hasPremium = !!changes.hasPremium.newValue;
+                    this.operationToken += 1;
+                    this.queueQuality(100);
+                }
+                if (changes.restartAfterQuality) {
+                    this.restartAfterQuality =
+                        !!changes.restartAfterQuality.newValue;
+                }
+                if (changes.enabled) {
                     if (changes.enabled)
                         this.enabled = changes.enabled.newValue !== false;
                     this.operationToken += 1;
@@ -90,7 +101,7 @@ class YouTubeQualityController {
     initialize() {
         document.addEventListener('yt-navigate-finish', () => {
             this.operationToken += 1;
-            this.queueQuality(1500);
+            this.queueQuality(3000);
         });
 
         window.addEventListener('yt-player-updated', () => {
@@ -107,6 +118,21 @@ class YouTubeQualityController {
             true,
         );
 
+        // YouTube can replace the player during SPA navigation without
+        // dispatching every player event. Watch only for a new player root;
+        // this avoids polling the whole page or reacting to ordinary UI DOM
+        // updates.
+        new MutationObserver((records) => {
+            for (const record of records) {
+                for (const node of record.addedNodes) {
+                    if (node.nodeType === Node.ELEMENT_NODE && node.id === 'movie_player') {
+                        this.queueQuality(800);
+                        return;
+                    }
+                }
+            }
+        }).observe(document.documentElement, {childList: true, subtree: true});
+
         this.queueQuality(2500);
     }
 
@@ -120,33 +146,44 @@ class YouTubeQualityController {
     }
 
     isAdShowing(player) {
-        return (
-            !!player &&
-            (player.classList.contains('ad-showing') ||
-                player.classList.contains('ad-interrupting'))
-        );
-    }
-
-    isPremiumItem(item) {
-        if (!item) return false;
-        const text = (item.textContent || '').toLowerCase();
-        if (text.includes('enhanced bitrate') || text.includes('premium')) {
-            return true;
-        }
+        if (!player) return false;
         if (
-            item.querySelector(
-                '.ytp-menuitem-premium-badge, .ytp-premium-label, [data-is-premium="true"]',
-            )
+            player.classList.contains('ad-showing') ||
+            player.classList.contains('ad-interrupting')
         ) {
             return true;
         }
-        return false;
+
+        // The player classes can arrive a moment after the ad UI. Check the
+        // visible, ad-specific controls as a second signal so the Settings
+        // button is never clicked in that gap.
+        return Array.from(
+            player.querySelectorAll(
+                '.ytp-ad-player-overlay, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-preview-container',
+            ),
+        ).some((element) => {
+            const style = window.getComputedStyle(element);
+            return (
+                style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                element.getClientRects().length > 0
+            );
+        });
     }
 
     isSuperResolutionItem(item) {
         if (!item) return false;
         const text = (item.textContent || '').toLowerCase();
         return text.includes('super resolution');
+    }
+
+    isPremiumItem(item) {
+        return (
+            !!item &&
+            !!item.querySelector(
+                '.ytp-menuitem-premium-badge, .ytp-premium-label, [data-is-premium="true"]',
+            )
+        );
     }
 
     // Best-effort stable id for "which video is this", so we can remember
@@ -186,32 +223,51 @@ class YouTubeQualityController {
         const videoId = this.getVideoId(player);
         if (videoId !== this.activeVideoId) {
             this.activeVideoId = videoId;
+            // This controller only needs to remember the video currently in
+            // the player. Clearing old entries keeps a long YouTube SPA
+            // session from accumulating an unbounded list of watched ids.
+            this.appliedVideos = {};
+            this.rejectedQualityLabels.clear();
             this.operationToken += 1;
         }
 
         // Skip repeated player-update events after this page has applied a
-        // quality to this exact video and account mode.
-        if (
-            videoId &&
-            this.appliedVideos[
-                `${videoId}:${this.hasPremium ? 'premium' : 'standard'}`
-            ]
-        ) {
+        // quality to this exact video.
+        const appliedKey = `${videoId}:${this.hasPremium ? 'premium' : 'standard'}`;
+        if (videoId && this.appliedVideos[appliedKey]) {
             return;
         }
 
         this.setQualityViaUI(player, videoId);
     }
 
-    setQualityViaUI(player, videoId) {
-        if (
-            this.isClicking ||
-            player.classList.contains('ytp-settings-menu-visible')
-        )
+    setQualityViaUI(player, videoId, skipReadinessCheck = false) {
+        if (this.isClicking || this.isWaitingForSettings) return;
+
+        // Do not interfere with a settings menu the viewer already opened.
+        // Requeue so this is not a one-shot failure once it is closed.
+        if (player.classList.contains('ytp-settings-menu-visible')) {
+            this.queueQuality(1500);
             return;
+        }
+
+        // The hidden panel is normally rendered before the visible controls.
+        // Waiting for its Quality row prevents opening a half-built menu just
+        // to close and reopen it once YouTube finishes its async UI work.
+        if (!skipReadinessCheck && !this.getQualityEntry(player)) {
+            this.waitForSettingsReady(player, videoId);
+            return;
+        }
 
         const settingsButton = player.querySelector('.ytp-settings-button');
         if (!settingsButton) return;
+
+        // Recheck at the last possible moment: an ad can start after the
+        // readiness check but before this click.
+        if (this.isAdShowing(player)) {
+            this.queueQuality(1500);
+            return;
+        }
 
         this.isClicking = true;
         const operationToken = this.operationToken;
@@ -250,6 +306,66 @@ class YouTubeQualityController {
         );
     }
 
+    getQualityEntry(root) {
+        return Array.from(
+            root.querySelectorAll('.ytp-panel-menu .ytp-menuitem'),
+        ).find((item) => {
+            const value = item.querySelector('.ytp-menuitem-content');
+            return (
+                value &&
+                /\b\d{3,4}p(?:\d+)?\b/i.test(value.textContent) &&
+                item.getAttribute('role') === 'menuitem' &&
+                item.getAttribute('aria-haspopup') === 'true'
+            );
+        });
+    }
+
+    waitForSettingsReady(player, videoId) {
+        this.isWaitingForSettings = true;
+        const operationToken = this.operationToken;
+        let settled = false;
+        let observer = null;
+
+        const finish = (callback) => {
+            if (settled) return;
+            settled = true;
+            if (observer) observer.disconnect();
+            this.isWaitingForSettings = false;
+            callback();
+        };
+
+        const openOrRetry = (allowUnreadyMenu = false) => {
+            if (
+                operationToken !== this.operationToken ||
+                videoId !== this.getVideoId(player)
+            ) {
+                finish(() => this.queueQuality(800));
+                return;
+            }
+            if (this.isAdShowing(player)) {
+                finish(() => this.queueQuality(1500));
+                return;
+            }
+            if (allowUnreadyMenu || this.getQualityEntry(player)) {
+                finish(() =>
+                    this.setQualityViaUI(player, videoId, allowUnreadyMenu),
+                );
+            }
+        };
+
+        observer = new MutationObserver(() => openOrRetry());
+        observer.observe(player, {childList: true, subtree: true});
+        openOrRetry();
+
+        // Some experiments lazily create the panel only after Settings is
+        // opened. Fall back once, rather than permanently waiting for markup
+        // that cannot exist yet.
+        setTimeout(
+            () => openOrRetry(true),
+            this.SETTINGS_READY_TIMEOUT,
+        );
+    }
+
     waitForQualityMenu(
         player,
         retries = this.MENU_RETRIES,
@@ -273,6 +389,7 @@ class YouTubeQualityController {
             if (this.isAdShowing(player)) {
                 this.closeSettingsMenu(player);
                 this.isClicking = false;
+                this.queueQuality(1500);
                 return;
             }
 
@@ -292,11 +409,12 @@ class YouTubeQualityController {
 
             const qualityItems = rawQualityItems.filter((item) => {
                 const label = item.textContent.trim();
-                if (/^auto\b/i.test(label)) return false;
-                if (this.isSuperResolutionItem(item)) {
-                    return true;
-                }
-                return this.hasPremium || !this.isPremiumItem(item);
+                return (
+                    !/^auto\b/i.test(label) &&
+                    !this.isDisabled(item) &&
+                    (this.hasPremium || !this.isPremiumItem(item)) &&
+                    !this.rejectedQualityLabels.has(label)
+                );
             });
 
             const targetQuality = qualityItems.sort((first, second) => {
@@ -316,36 +434,18 @@ class YouTubeQualityController {
                 //     `[QualityTube] Clicking quality option: ${selectedQuality}`,
                 // );
                 targetQuality.click();
-
-                // No closeSettingsMenu() here: YouTube closes the settings
-                // pane on its own the moment a quality option is picked.
-                // Calling it ourselves right after was just re-clicking the
-                // settings button and popping the (already-closed) pane
-                // back open.
-                this.isClicking = false;
-                if (videoId) {
-                    this.appliedVideos[
-                        `${videoId}:${this.hasPremium ? 'premium' : 'standard'}`
-                    ] = true;
-                }
+                this.confirmQualitySelection(
+                    player,
+                    targetQuality,
+                    selectedQuality,
+                    videoId,
+                    operationToken,
+                );
                 return;
             }
 
             if (!subMenuOpened && settingsMenu) {
-                const qualityEntry = Array.from(
-                    settingsMenu.querySelectorAll(
-                        '.ytp-panel-menu .ytp-menuitem',
-                    ),
-                ).find((item) => {
-                    const label = item.querySelector('.ytp-menuitem-label');
-                    return (
-                        label &&
-                        label.textContent.replace(/\s+/g, ' ').trim() ===
-                            'Quality' &&
-                        item.getAttribute('role') === 'menuitem' &&
-                        item.getAttribute('aria-haspopup') === 'true'
-                    );
-                });
+                const qualityEntry = this.getQualityEntry(settingsMenu);
                 if (qualityEntry) {
                     // console.log('[QualityTube] Clicking quality submenu entry');
                     qualityEntry.click();
@@ -383,10 +483,73 @@ class YouTubeQualityController {
         return match ? Number(match[1]) : 0;
     }
 
-    getQualityNumber(value) {
-        const match = String(value || '').match(/(\d{3,4})/);
-        return match ? Number(match[1]) : 0;
+    isDisabled(item) {
+        return (
+            item.hasAttribute('disabled') ||
+            item.getAttribute('aria-disabled') === 'true'
+        );
     }
+
+    confirmQualitySelection(player, item, label, videoId, operationToken) {
+        setTimeout(() => {
+            // Some player versions close and replace the quality submenu
+            // before updating the old menu item's aria state. A closed
+            // settings menu is YouTube's normal success signal after a
+            // quality choice, so do not falsely blacklist that choice.
+            const menuClosed = !player.classList.contains(
+                'ytp-settings-menu-visible',
+            );
+            const wasSelected =
+                item.getAttribute('aria-checked') === 'true' ||
+                item.classList.contains('ytp-menuitem-selected') ||
+                menuClosed;
+            this.isClicking = false;
+
+            if (operationToken !== this.operationToken || this.isAdShowing(player)) {
+                this.queueQuality(1500);
+                return;
+            }
+
+            if (wasSelected) {
+                if (videoId) {
+                    this.appliedVideos[
+                        `${videoId}:${this.hasPremium ? 'premium' : 'standard'}`
+                    ] = true;
+                }
+                if (this.restartAfterQuality) this.restartFromBeginning(player);
+                return;
+            }
+
+            // A displayed tier can still be unavailable to the account.
+            // Never trust the account type in storage: exclude the rejected
+            // item and let the next attempt choose the next enabled quality.
+            this.rejectedQualityLabels.add(label);
+            this.closeSettingsMenu(player);
+            this.queueQuality(500);
+        }, this.MENU_OPEN_DELAY);
+    }
+
+    restartFromBeginning(player) {
+        try {
+            if (typeof player.seekTo === 'function') {
+                player.seekTo(0, true);
+                return;
+            }
+        } catch (_error) {
+            // Fall through to the media element when the player API is not
+            // available from the content-script world.
+        }
+
+        const video = player.querySelector('video');
+        if (!video) return;
+        try {
+            if (typeof video.fastSeek === 'function') video.fastSeek(0);
+            else video.currentTime = 0;
+        } catch (_error) {
+            // Seeking is best effort; a stream can briefly be non-seekable.
+        }
+    }
+
 }
 
 new YouTubeQualityController();

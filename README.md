@@ -15,7 +15,7 @@
 
 ## Overview
 
-QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 extension that waits for the active YouTube ad to finish and then opens the player settings to choose the highest available quality for the current account mode. If the user is flagged as Premium, it allows enhanced-bitrate entries; otherwise it ignores premium-only entries. It never treats YouTube's Auto-selected resolution as “already set” and remembers each video ID plus premium mode during the current page session so it does not keep reopening the settings menu just to check.
+QualityTube is a lightweight, cross-browser (Chrome + Firefox) Manifest V3 extension that waits for the active YouTube ad to finish and then opens the player settings to choose the highest available quality. It only accepts a selection once YouTube marks it selected; unavailable tiers fall back to the next enabled option. It never treats YouTube's Auto-selected resolution as “already set” and remembers the current video during the page session so it does not keep reopening the settings menu just to check.
 
 ## Quick install
 
@@ -46,30 +46,30 @@ Click Here 👉
 
 ## How it works
 
-The content script waits for YouTube's `#movie_player` to exist, then rechecks on navigation and player updates. It deliberately does nothing while an ad is active, and only after the ad ends does it open the visible settings menu, navigate to Quality, and click the highest allowed item for the current premium mode. Premium users only see enhanced-bitrate quality entries; non-premium users ignore premium-only entries. It tracks the last explicitly applied video ID plus premium state internally so it can skip re-checking without opening the UI again, even when YouTube has automatically selected a high resolution.
+The content script waits for YouTube's `#movie_player` to exist, then rechecks on navigation and player updates. It deliberately does nothing while an ad is active, and only after the ad ends does it open the visible settings menu, find the Quality row from its resolution value rather than the translated label, and click the highest enabled item. It verifies that YouTube accepted the selection before marking the video handled; a rejected tier is skipped on the next attempt.
 
 ## Quality Selection Algorithm
 
-The extension does not rely on YouTube's `Auto` option or on a numeric FPS/resolution comparison. In the current YouTube menu, the practical choice is driven by the available quality labels, and the extension picks the first eligible item in the menu order after filtering.
+The extension does not rely on YouTube's `Auto` option. It ranks the available enabled entries by resolution and chooses the highest one.
 
 Selection works like this:
 
-- If a quality item is labeled `Super Resolution`, it is treated as a valid choice for both premium and non-premium users.
-- If the user is premium, items labeled `Enhanced bitrate` or `Premium` are also allowed.
-- If the user is not premium, premium-only entries are ignored.
+- If a quality item is labeled `Super Resolution`, it is preferred over a numeric resolution.
+- Disabled entries are skipped.
+- A choice is recorded only after YouTube marks it selected. A rejected tier is skipped and the next enabled choice is tried.
 - `Auto` is never treated as a valid target and is skipped.
-- After filtering, the extension prefers `Super Resolution` entries first, then premium-marked entries when relevant, and then clicks the first matching item.
+- After filtering, the extension prefers `Super Resolution`, then the greatest numeric resolution.
 
-This means the extension intentionally selects the best available labeled quality for the current account mode, rather than comparing resolution values like 1080p/1440p/2160p numerically.
+This means the extension selects the best eligible quality. Enable the YouTube Premium option when the account can use entries marked Premium or Enhanced bitrate.
 
 ## Settings
 
 The popup provides two controls:
 
 - **Enable automatic quality** pauses and resumes the extension without removing it.
-- **Do you have premium?** allows Premium enhanced-bitrate entries when available.
-
-The extension remembers handled video and account-mode combinations during the current page session. A full page reload starts a fresh session and applies quality again.
+- **YouTube Premium** allows entries marked by YouTube as Premium, including Enhanced bitrate. Leave it off for non-Premium accounts so those entries are skipped before any click.
+- **Restart after applying quality** is off by default. When enabled, it seeks to 0:00 after YouTube confirms the new quality; it does not start a paused video.
+The extension remembers the handled current video during the page session. A full page reload starts a fresh session and applies quality again.
 
 ## Packaging
 
@@ -84,7 +84,7 @@ Pushing a change to `extension/**`, `build-chrome.sh`, `build-firefox.sh`, or th
 
 ## Privacy
 
-QualityTube requests YouTube host access and `storage` permission for the Premium setting, has no background service worker, and does not collect, transmit, or sell any data. All extension files run locally; no network requests are made by the extension itself.
+QualityTube requests YouTube host access and `storage` permission for its enabled setting, has no background service worker, and does not collect, transmit, or sell any data. All extension files run locally; no network requests are made by the extension itself.
 
 ## Authors
 

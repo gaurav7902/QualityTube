@@ -1,7 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     const closeButton = document.getElementById('close');
-    const premiumCheckbox = document.getElementById('has-premium');
     const enabledCheckbox = document.getElementById('enabled');
+    const premiumCheckbox = document.getElementById('has-premium');
+    const restartCheckbox = document.getElementById('restart-after-quality');
 
     if (closeButton) {
         closeButton.addEventListener('click', () => window.close());
@@ -35,23 +36,33 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     if (storage) {
-        getStorage({hasPremium: false, enabled: true}, (items) => {
-            if (items) {
-                if (premiumCheckbox)
-                    premiumCheckbox.checked = !!items.hasPremium;
-                if (enabledCheckbox)
-                    enabledCheckbox.checked = items.enabled !== false;
-            }
-        });
+        getStorage(
+            {enabled: true, hasPremium: false, restartAfterQuality: false},
+            (items) => {
+                if (items) {
+                    if (enabledCheckbox)
+                        enabledCheckbox.checked = items.enabled !== false;
+                    if (premiumCheckbox)
+                        premiumCheckbox.checked = !!items.hasPremium;
+                    if (restartCheckbox)
+                        restartCheckbox.checked = !!items.restartAfterQuality;
+                }
+            },
+        );
 
+        if (enabledCheckbox) {
+            enabledCheckbox.addEventListener('change', () =>
+                setStorage({enabled: enabledCheckbox.checked}),
+            );
+        }
         if (premiumCheckbox) {
             premiumCheckbox.addEventListener('change', () =>
                 setStorage({hasPremium: premiumCheckbox.checked}),
             );
         }
-        if (enabledCheckbox) {
-            enabledCheckbox.addEventListener('change', () =>
-                setStorage({enabled: enabledCheckbox.checked}),
+        if (restartCheckbox) {
+            restartCheckbox.addEventListener('change', () =>
+                setStorage({restartAfterQuality: restartCheckbox.checked}),
             );
         }
     }

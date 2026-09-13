@@ -21,6 +21,13 @@ h1 {
     margin-bottom: 16px;
 }
 
+.setting-description {
+    margin: 6px 48px 0 0;
+    color: #606060;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
 .toggle-container {
     display: flex;
     align-items: center;
