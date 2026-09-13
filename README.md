@@ -26,16 +26,14 @@ Available on addon store :)
 Click Here 👉
 [![Firefox](https://img.shields.io/badge/Firefox-Install-FF7139?logo=firefox&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/qualitytube/)
 
-> Firefox's `host_permissions` are opt-in. If quality isn't applied after install, open the extensions panel → this extension → _Permissions_ tab → allow `youtube.com`.
+### Microsoft Edge
 
-### Chrome / Edge / Brave
-
-<!-- ### Microsoft Edge
-
-Available on Microsoft Edge Add-ons
+Available on Microsoft Edge Add-ons Store :)
 
 Click Here 👉
-[![Edge](https://img.shields.io/badge/Edge-Install-0078D7?logo=microsoft-edge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/codeforces-dark-theme/ahjnagbaenbiokkmamnjblanbejepfnh) -->
+[![Edge](https://img.shields.io/badge/Edge-Install-0078D7?logo=microsoft-edge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/qualitytube/cckeonfnmginclhnellobafdmfooflgn)
+
+### Chrome / Edge / Brave
 
 1. Download from the [latest release](https://github.com/gaurav7902/QualityTube/releases/tag/v1.0.9).
 2. Unzip the file to a local folder.
@@ -47,6 +45,10 @@ Click Here 👉
 ## How it works
 
 The content script waits for YouTube's `#movie_player` to exist, then rechecks on navigation and player updates. It deliberately does nothing while an ad is active, and only after the ad ends does it open the visible settings menu, find the Quality row from its resolution value rather than the translated label, and click the highest enabled item. It verifies that YouTube accepted the selection before marking the video handled; a rejected tier is skipped on the next attempt.
+
+## Note
+
+> Firefox's `host_permissions` are opt-in. If quality isn't applied after install, open the extensions panel → this extension → _Permissions_ tab → allow `youtube.com`.
 
 ## Quality Selection Algorithm
 
