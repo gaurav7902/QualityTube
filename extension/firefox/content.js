@@ -14,16 +14,18 @@ class YouTubeQualityController {
         this.applyTimer = null;
         this.isClicking = false;
         this.isWaitingForSettings = false;
-        this.CLICK_DELAY = 300;
-        this.MENU_OPEN_DELAY = 500;
-        this.MENU_RETRIES = 12;
-        this.SETTINGS_READY_TIMEOUT = 3000;
+        this.CLICK_DELAY = 150;
+        this.MENU_OPEN_DELAY = 250;
+        this.MENU_RETRIES = 10;
+        this.SETTINGS_READY_TIMEOUT = 1500;
         this.enabled = true;
         this.hasPremium = false;
         this.restartAfterQuality = false;
         this.storageReady = false;
         this.appliedVideos = {};
         this.rejectedQualityLabels = new Set();
+        this.superResolutionQualityKeys = new Set();
+        this.enhancedBitrateQualityKeys = new Set();
         this.activeVideoId = null;
         this.operationToken = 0;
         this.initStorage();
@@ -101,7 +103,7 @@ class YouTubeQualityController {
     initialize() {
         document.addEventListener('yt-navigate-finish', () => {
             this.operationToken += 1;
-            this.queueQuality(3000);
+            this.queueQuality(1500);
         });
 
         window.addEventListener('yt-player-updated', () => {
@@ -125,7 +127,10 @@ class YouTubeQualityController {
         new MutationObserver((records) => {
             for (const record of records) {
                 for (const node of record.addedNodes) {
-                    if (node.nodeType === Node.ELEMENT_NODE && node.id === 'movie_player') {
+                    if (
+                        node.nodeType === Node.ELEMENT_NODE &&
+                        node.id === 'movie_player'
+                    ) {
                         this.queueQuality(800);
                         return;
                     }
@@ -133,7 +138,7 @@ class YouTubeQualityController {
             }
         }).observe(document.documentElement, {childList: true, subtree: true});
 
-        this.queueQuality(2500);
+        this.queueQuality(1200);
     }
 
     queueQuality(delay) {
@@ -173,23 +178,73 @@ class YouTubeQualityController {
 
     isSuperResolutionItem(item) {
         if (!item) return false;
-        const text = (item.textContent || '').toLowerCase();
-        return text.includes('super resolution');
+        if (this.getItemLabel(item).includes('super resolution')) return true;
+        const match = this.getItemLabel(item).match(/\b\d{3,4}p\d*\b/i);
+        return (
+            !!match &&
+            this.superResolutionQualityKeys.has(match[0].toLowerCase())
+        );
     }
 
-    isPremiumItem(item) {
+    isEnhancedBitrateItem(item) {
+        if (!item) return false;
+        if (this.getItemLabel(item).includes('enhanced bitrate')) return true;
+        const match = this.getItemLabel(item).match(/\b\d{3,4}p\d*\b/i);
         return (
-            !!item &&
-            !!item.querySelector(
-                '.ytp-menuitem-premium-badge, .ytp-premium-label, [data-is-premium="true"]',
-            )
+            !!match &&
+            this.enhancedBitrateQualityKeys.has(match[0].toLowerCase())
         );
+    }
+
+    getItemLabel(item) {
+        return [
+            item.textContent,
+            item.getAttribute('aria-label'),
+            item.getAttribute('data-tooltip-text'),
+            item.getAttribute('title'),
+        ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+    }
+
+    getSuperResolutionQualityKeys() {
+        return this.getPaygatedQualityKeys('super resolution');
+    }
+
+    getPaygatedQualityKeys(indicator) {
+        const keys = new Set();
+        const escapedIndicator = indicator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern =
+            new RegExp(
+                `key\\s*:\\s*['"]([^'"]+)['"][\\s\\S]{0,300}?paygatedIndicatorText\\s*:\\s*['"]${escapedIndicator}['"]`,
+                'gi',
+            );
+        for (const script of document.scripts) {
+            let match;
+            while ((match = pattern.exec(script.textContent || ''))) {
+                const quality = match[1].match(/\b\d{3,4}p\d*\b/i);
+                if (quality) keys.add(quality[0].toLowerCase());
+            }
+        }
+        return keys;
     }
 
     // Best-effort stable id for "which video is this", so we can remember
     // that we've already applied quality to it without re-opening the
     // settings menu just to check.
     getVideoId(player) {
+        try {
+            const url = new URL(location.href);
+            const queryVideoId = url.searchParams.get('v');
+            if (queryVideoId) return queryVideoId;
+            const pathMatch = url.pathname.match(
+                /\/(?:shorts|embed)\/([^/?#]+)/,
+            );
+            if (pathMatch) return pathMatch[1];
+        } catch (_error) {
+            /* ignore */
+        }
         try {
             if (typeof player.getVideoData === 'function') {
                 const data = player.getVideoData();
@@ -199,8 +254,7 @@ class YouTubeQualityController {
             /* ignore */
         }
         try {
-            const match = location.href.match(/[?&]v=([^&]+)/);
-            if (match) return match[1];
+            return `${location.pathname}${location.search}`;
         } catch (_error) {
             /* ignore */
         }
@@ -228,6 +282,10 @@ class YouTubeQualityController {
             // session from accumulating an unbounded list of watched ids.
             this.appliedVideos = {};
             this.rejectedQualityLabels.clear();
+            this.superResolutionQualityKeys =
+                this.getSuperResolutionQualityKeys();
+            this.enhancedBitrateQualityKeys =
+                this.getPaygatedQualityKeys('enhanced bitrate');
             this.operationToken += 1;
         }
 
@@ -308,12 +366,15 @@ class YouTubeQualityController {
 
     getQualityEntry(root) {
         return Array.from(
-            root.querySelectorAll('.ytp-panel-menu .ytp-menuitem'),
+            root.querySelectorAll(
+                '.ytp-panel-menu .ytp-menuitem, .ytp-panel-menu [role="menuitem"]',
+            ),
         ).find((item) => {
             const value = item.querySelector('.ytp-menuitem-content');
             return (
                 value &&
-                /\b\d{3,4}p(?:\d+)?\b/i.test(value.textContent) &&
+                (/\b\d{3,4}p(?:\d+)?\b/i.test(value.textContent) ||
+                    /\bquality\b/i.test(this.getItemLabel(item))) &&
                 item.getAttribute('role') === 'menuitem' &&
                 item.getAttribute('aria-haspopup') === 'true'
             );
@@ -360,10 +421,7 @@ class YouTubeQualityController {
         // Some experiments lazily create the panel only after Settings is
         // opened. Fall back once, rather than permanently waiting for markup
         // that cannot exist yet.
-        setTimeout(
-            () => openOrRetry(true),
-            this.SETTINGS_READY_TIMEOUT,
-        );
+        setTimeout(() => openOrRetry(true), this.SETTINGS_READY_TIMEOUT);
     }
 
     waitForQualityMenu(
@@ -398,7 +456,7 @@ class YouTubeQualityController {
                 subMenuOpened && settingsMenu
                     ? Array.from(
                           settingsMenu.querySelectorAll(
-                              ".ytp-quality-menu .ytp-menuitem, [role='menuitemradio']",
+                              ".ytp-quality-menu .ytp-menuitem, .ytp-quality-menu [role='menuitemradio'], [role='menuitemradio']",
                           ),
                       ).filter(
                           (item) =>
@@ -412,7 +470,7 @@ class YouTubeQualityController {
                 return (
                     !/^auto\b/i.test(label) &&
                     !this.isDisabled(item) &&
-                    (this.hasPremium || !this.isPremiumItem(item)) &&
+                    (this.hasPremium || !this.isEnhancedBitrateItem(item)) &&
                     !this.rejectedQualityLabels.has(label)
                 );
             });
@@ -505,7 +563,10 @@ class YouTubeQualityController {
                 menuClosed;
             this.isClicking = false;
 
-            if (operationToken !== this.operationToken || this.isAdShowing(player)) {
+            if (
+                operationToken !== this.operationToken ||
+                this.isAdShowing(player)
+            ) {
                 this.queueQuality(1500);
                 return;
             }
@@ -549,7 +610,6 @@ class YouTubeQualityController {
             // Seeking is best effort; a stream can briefly be non-seekable.
         }
     }
-
 }
 
 new YouTubeQualityController();

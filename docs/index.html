@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+            name="description"
+            content="QualityTube automatically chooses the highest available YouTube quality for every video."
+        />
+        <title>QualityTube | Always watch at the best quality</title>
+        <link rel="icon" href="../extension/chromium-based/icons/icon128.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <header class="site-header">
+            <a class="brand" href="./" aria-label="QualityTube home">
+                <img
+                    src="../extension/chromium-based/icons/icon128.png"
+                    alt=""
+                />
+                <span>QualityTube</span>
+            </a>
+            <nav aria-label="Primary navigation">
+                <a href="#how-it-works">How it works</a>
+                <a href="#privacy">Privacy</a>
+                <a
+                    class="nav-link"
+                    href="https://github.com/gaurav7902/QualityTube"
+                    target="_blank"
+                    rel="noreferrer"
+                    >GitHub <span aria-hidden="true">↗</span></a
+                >
+            </nav>
+        </header>
+
+        <main>
+            <section class="hero">
+                <div class="hero-copy">
+                    <p class="eyebrow">
+                        <span class="status-dot"></span> Set it once. Watch in
+                        full detail.
+                    </p>
+                    <h1>Never settle for <em>Auto.</em></h1>
+                    <p class="hero-text">
+                        QualityTube automatically selects the highest available
+                        YouTube quality after the ad finishes, from 1080p to 8K
+                        and beyond.
+                    </p>
+                    <div class="hero-actions">
+                        <a
+                            class="button button-primary"
+                            href="https://addons.mozilla.org/en-US/firefox/addon/qualitytube/"
+                            target="_blank"
+                            rel="noreferrer"
+                            >Install for Firefox
+                            <span aria-hidden="true">↗</span></a
+                        >
+                        <a
+                            class="button button-secondary"
+                            href="https://github.com/gaurav7902/QualityTube/releases/latest"
+                            target="_blank"
+                            rel="noreferrer"
+                            >Get Chromium build
+                            <span aria-hidden="true">↗</span></a
+                        >
+                    </div>
+                    <p class="microcopy">
+                        For Chrome, Edge, and Brave via Developer Mode. Free and
+                        open source.
+                    </p>
+                </div>
+                <div
+                    class="quality-display"
+                    aria-label="QualityTube quality selection preview"
+                >
+                    <div class="display-label">AVAILABLE QUALITY</div>
+                    <div class="display-main">
+                        <span>8K</span><strong>2160p</strong>
+                    </div>
+                    <div class="quality-list">
+                        <div>
+                            <span>2160p</span><b class="selected">SELECTED</b>
+                        </div>
+                        <div><span>1440p</span><b>AVAILABLE</b></div>
+                        <div><span>1080p</span><b>AVAILABLE</b></div>
+                        <div><span>Auto</span><b class="muted">SKIPPED</b></div>
+                    </div>
+                    <div class="scan-line"></div>
+                </div>
+            </section>
+
+            <section class="ticker" aria-label="QualityTube benefits">
+                <span>HIGHER RESOLUTION</span><i>✦</i
+                ><span>NO DATA COLLECTION</span><i>✦</i
+                ><span>YOUTUBE + FIREFOX + CHROMIUM</span><i>✦</i
+                ><span>SUPER RESOLUTION READY</span>
+            </section>
+
+            <section class="intro" id="how-it-works">
+                <p class="section-kicker">01 / The point</p>
+                <div>
+                    <h2>For people who would rather spend data than pixels.</h2>
+                    <p>
+                        Unlimited plan? Generous data cap? QualityTube is built
+                        for the simple preference: give me the best picture
+                        YouTube can offer, every time.
+                    </p>
+                </div>
+            </section>
+
+            <section class="feature-grid" aria-label="Features">
+                <article class="feature feature-wide">
+                    <span class="feature-number">01</span>
+                    <h3>Highest available, automatically</h3>
+                    <p>
+                        It skips Auto, ignores disabled tiers, and works upward
+                        until YouTube confirms the best eligible quality.
+                    </p>
+                    <div class="quality-badges">
+                        <span>8K</span><span>4K</span><span>1440p</span
+                        ><span>1080p</span>
+                    </div>
+                </article>
+                <article class="feature feature-dark">
+                    <span class="feature-number">02</span>
+                    <h3>Quiet by design</h3>
+                    <p>
+                        It waits for ads to finish and does not keep reopening
+                        the player menu for the same video.
+                    </p>
+                    <div class="pulse-mark" aria-hidden="true">
+                        <span></span><span></span><span></span>
+                    </div>
+                </article>
+                <article class="feature">
+                    <span class="feature-number">03</span>
+                    <h3>Premium-aware</h3>
+                    <p>
+                        Opt in to Premium and Enhanced bitrate options when your
+                        account can use them. Super Resolution is prioritized
+                        too.
+                    </p>
+                </article>
+            </section>
+
+            <section class="install" id="install">
+                <div>
+                    <p class="section-kicker">02 / Get started</p>
+                    <h2>Make the best quality the default.</h2>
+                </div>
+                <div class="install-options">
+                    <a
+                        class="install-option"
+                        href="https://addons.mozilla.org/en-US/firefox/addon/qualitytube/"
+                        target="_blank"
+                        rel="noreferrer"
+                        ><span class="browser-icon">F</span
+                        ><span
+                            ><strong>Firefox</strong
+                            ><small>Install from Add-ons</small></span
+                        ><b>↗</b></a
+                    >
+                    <a
+                        class="install-option"
+                        href="https://github.com/gaurav7902/QualityTube/releases/latest"
+                        target="_blank"
+                        rel="noreferrer"
+                        ><span class="browser-icon chromium">C</span
+                        ><span
+                            ><strong>Chrome / Edge / Brave</strong
+                            ><small>Download the latest release</small></span
+                        ><b>↗</b></a
+                    >
+                </div>
+            </section>
+
+            <section class="privacy" id="privacy">
+                <div class="privacy-icon" aria-hidden="true">◎</div>
+                <div>
+                    <p class="section-kicker">03 / Privacy</p>
+                    <h2>Your viewing stays yours.</h2>
+                    <p>
+                        QualityTube runs locally in your browser. It does not
+                        collect, transmit, or sell data, and it makes no network
+                        requests of its own.
+                    </p>
+                </div>
+                <a
+                    href="https://github.com/gaurav7902/QualityTube/blob/main/README.md#privacy"
+                    target="_blank"
+                    rel="noreferrer"
+                    >Read the privacy note <span aria-hidden="true">↗</span></a
+                >
+            </section>
+        </main>
+
+        <footer>
+            <span>QUALITYTUBE / MIT LICENSE</span
+            ><a
+                href="https://github.com/gaurav7902/QualityTube"
+                target="_blank"
+                rel="noreferrer"
+                >Open source on GitHub ↗</a
+            >
+        </footer>
+    </body>
+</html>
