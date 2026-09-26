@@ -351,18 +351,16 @@ h2 {
 }
 .browser-icon {
     align-items: center;
-    background: var(--coral);
-    border-radius: 50%;
     display: flex;
-    font-size: 18px;
-    font-weight: 700;
+    flex: 0 0 40px;
     height: 40px;
     justify-content: center;
     width: 40px;
 }
-.browser-icon.chromium {
-    background: var(--ink);
-    color: var(--lime);
+.browser-icon svg {
+    display: block;
+    height: 40px;
+    width: 40px;
 }
 .install-option strong,
 .install-option small {

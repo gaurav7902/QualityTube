@@ -8,7 +8,12 @@
             content="QualityTube automatically chooses the highest available YouTube quality for every video."
         />
         <title>QualityTube | Always watch at the best quality</title>
-        <link rel="icon" href="../extension/chromium-based/icons/icon128.png" />
+        <link
+            rel="icon"
+            href="assets/qualitytube-mark.svg"
+            type="image/svg+xml"
+        />
+        <link rel="apple-touch-icon" href="assets/qualitytube-mark.svg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
@@ -20,10 +25,7 @@
     <body>
         <header class="site-header">
             <a class="brand" href="./" aria-label="QualityTube home">
-                <img
-                    src="../extension/chromium-based/icons/icon128.png"
-                    alt=""
-                />
+                <img src="assets/qualitytube-mark.svg" alt="" />
                 <span>QualityTube</span>
             </a>
             <nav aria-label="Primary navigation">
@@ -160,7 +162,25 @@
                         href="https://addons.mozilla.org/en-US/firefox/addon/qualitytube/"
                         target="_blank"
                         rel="noreferrer"
-                        ><span class="browser-icon">F</span
+                        ><span class="browser-icon firefox" aria-hidden="true">
+                            <svg viewBox="0 0 48 48" focusable="false">
+                                <path
+                                    fill="#FF7139"
+                                    d="M36.5 8.8c-2.4-4-6.8-6.8-12-7.2 3.7 2.3 5.6 5.8 5.3 9.6-2.4-2.9-6.2-4.6-10.2-4.5C10.2 7 3 14.6 3 24c0 10.5 8.5 19 19 19 11.5 0 20.8-9.9 18.8-21.7-.4 6.2-5.5 11.2-11.9 11.2-5.2 0-9.8-3.5-11.2-8.5 2.1 2.1 5 3.3 8 3.3 6.2 0 11.2-5 11.2-11.2 0-2.8-1-5.4-2.8-7.3Z"
+                                />
+                                <circle
+                                    cx="28.8"
+                                    cy="20.2"
+                                    r="4.2"
+                                    fill="#17211F"
+                                />
+                                <circle
+                                    cx="30.1"
+                                    cy="18.9"
+                                    r="1.35"
+                                    fill="#F4F1E9"
+                                />
+                            </svg> </span
                         ><span
                             ><strong>Firefox</strong
                             ><small>Install from Add-ons</small></span
@@ -171,7 +191,29 @@
                         href="https://github.com/gaurav7902/QualityTube/releases/latest"
                         target="_blank"
                         rel="noreferrer"
-                        ><span class="browser-icon chromium">C</span
+                        ><span class="browser-icon chromium" aria-hidden="true">
+                            <svg viewBox="0 0 48 48" focusable="false">
+                                <path
+                                    fill="#EA4335"
+                                    d="M24 24 9.5 7.8A20.2 20.2 0 0 1 42.3 18H24Z"
+                                />
+                                <path
+                                    fill="#FBBC04"
+                                    d="M24 24 42.3 18a20.2 20.2 0 0 1-9.2 23.4L24 24Z"
+                                />
+                                <path
+                                    fill="#34A853"
+                                    d="M24 24 33.1 41.4A20.2 20.2 0 0 1 9.5 7.8L24 24Z"
+                                />
+                                <circle
+                                    cx="24"
+                                    cy="24"
+                                    r="9.1"
+                                    fill="#4285F4"
+                                    stroke="#F4F1E9"
+                                    stroke-width="2"
+                                />
+                            </svg> </span
                         ><span
                             ><strong>Chrome / Edge / Brave</strong
                             ><small>Download the latest release</small></span
